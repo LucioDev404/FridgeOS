@@ -80,10 +80,8 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.settingsEnrichmentEnabled),
             subtitle: Text(l10n.settingsEnrichmentBody),
             value: prefs.enrichmentEnabled,
-            onChanged: (value) => runWithFeedback(
-              context,
-              actions.setEnrichmentEnabled(value),
-            ),
+            onChanged: (value) =>
+                runWithFeedback(context, actions.setEnrichmentEnabled(value)),
           ),
           const Divider(height: AppSpacing.xl),
           Text(
@@ -177,9 +175,9 @@ class SettingsScreen extends ConsumerWidget {
       );
       await _files.shareBackup(file);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.settingsBackupExported)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.settingsBackupExported)));
     } on Object {
       if (!context.mounted) return;
       showActionFailure(context, l10n.actionFailed);

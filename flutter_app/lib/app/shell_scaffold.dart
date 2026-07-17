@@ -35,7 +35,7 @@ class ShellScaffold extends StatelessWidget {
     final title = kDestinations[navigationShell.currentIndex].label(l10n);
 
     final scanButton = FloatingActionButton.extended(
-      onPressed: () => context.go('/scan'),
+      onPressed: () => context.push('/scan'),
       icon: const Icon(Icons.qr_code_scanner),
       label: Text(l10n.scan),
     );
@@ -53,7 +53,7 @@ class ShellScaffold extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: FloatingActionButton(
                   heroTag: 'scan-rail',
-                  onPressed: () => context.go('/scan'),
+                  onPressed: () => context.push('/scan'),
                   tooltip: l10n.scan,
                   child: const Icon(Icons.qr_code_scanner),
                 ),

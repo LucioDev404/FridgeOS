@@ -6,6 +6,7 @@ import 'package:fridgeos/app/providers.dart';
 import 'package:fridgeos/data/providers.dart';
 import 'package:fridgeos/domain/entities/location.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
+import 'package:fridgeos/features/barcode/presentation/scan_screen.dart';
 import 'package:fridgeos/infrastructure/database/app_database.dart';
 import 'package:fridgeos/l10n/gen/app_localizations_en.dart';
 
@@ -56,6 +57,14 @@ Future<void> _pumpApp(WidgetTester tester, {required Size size}) async {
 void main() {
   final en = AppLocalizationsEn();
 
+  setUp(() {
+    debugDisableCameraPreview = true;
+  });
+
+  tearDown(() {
+    debugDisableCameraPreview = false;
+  });
+
   group('App shell', () {
     testWidgets('boots to the home dashboard', (tester) async {
       await _pumpApp(tester, size: const Size(1280, 800));
@@ -99,7 +108,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(en.scanTitle), findsOneWidget);
-      expect(find.text(en.scanEmptyTitle), findsOneWidget);
+      expect(find.byType(BackButton), findsOneWidget);
+      // Camera is disabled in tests; manual entry is the fallback path.
+      expect(find.text(en.fieldBarcode), findsOneWidget);
+    });
+
+    testWidgets('scan back button returns to the shell', (tester) async {
+      await _pumpApp(tester, size: const Size(1280, 800));
+
+      await tester.tap(find.byTooltip(en.scan).first);
+      await tester.pumpAndSettle();
+      expect(find.text(en.scanTitle), findsOneWidget);
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text(en.scanTitle), findsNothing);
+      expect(find.byType(NavigationRail), findsOneWidget);
     });
   });
 }

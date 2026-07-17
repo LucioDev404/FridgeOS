@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- CI format gate: format `settings_screen.dart`.
+- App updates: bump to `1.0.1+2` so Android installs over older builds (`versionCode` must increase).
+
 ### Added
 - **Phase 1 — Documentation & architecture.** Complete `docs/` set (vision, FRs/NFRs,
   SRS, domain, database, architecture, threat model, security design, UI guidelines,
