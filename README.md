@@ -5,10 +5,11 @@ Offline-first Android tablet application for managing household food inventory.
 FridgeOS lives on the kitchen tablet and answers four questions at a glance:
 **What do we have? Where is it? What expires soon? What can we cook / must we buy?**
 
-> **Status:** Phase 2 — Project initialization complete. The `flutter_app/`
-> skeleton boots to an adaptive Material 3 shell, with the Clean Architecture
-> structure, hardened Android configuration, CI/CD and tests in place. Feature
-> implementation follows the [roadmap](docs/11-roadmap.md).
+> **Status:** Phase 3 — Database & domain complete. On top of the Phase 2 shell,
+> the app now has a pure domain layer (entities, value objects, services), a
+> normalized Drift/SQLite schema with migrations and seeding, transactional
+> Drift-backed repositories, and SQLCipher-ready key management — all covered by
+> tests. Feature UIs follow the [roadmap](docs/11-roadmap.md).
 
 ---
 

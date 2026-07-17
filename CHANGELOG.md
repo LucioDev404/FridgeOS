@@ -37,5 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     widget tests (app shell/navigation) and a manifest security fitness test.
   - CI/CD workflows (format+analyze+test+coverage, secret+dependency audit,
     APK+AAB build) and developer scripts (`bootstrap`, `gen`, `verify`).
+- **Phase 3 — Database & domain.**
+  - Pure domain layer (`lib/domain/`): self-validating value objects
+    (`Barcode` with GTIN check-digit, `Quantity`, `DateOnly`, controlled enums),
+    immutable entities (`Product`, `Location`, `InventoryItem`,
+    `InventoryEvent`, `Recipe`, `ShoppingListItem`, `UserPreferences`), domain
+    services (`ExpirationPolicy`, `InventoryMutationService` enforcing the
+    non-negative-quantity and one-event-per-mutation invariants) and repository
+    interfaces.
+  - Normalized Drift/SQLite schema (11 tables) with UUID keys, soft-delete +
+    `sync_version` audit columns, `CHECK` constraints, foreign keys enforced at
+    runtime, migration strategy and first-run seeding (default locations,
+    preferences, schema-version marker).
+  - Drift-backed repositories (Product, Location, Inventory) with row↔domain
+    mappers; inventory mutations persist item state and their immutable event in
+    a single transaction (atomicity verified by test).
+  - SQLCipher-ready security plumbing: `SecretStore` abstraction over
+    Keystore-backed secure storage and `DatabaseKeyManager` (256-bit key
+    lifecycle); connection opener with a documented encryption extension point.
+  - Riverpod wiring for database, repositories and services.
+  - 81 passing tests across value objects, services, repository CRUD,
+    event-atomicity/rollback, key management and schema/seed verification.
 
 [Unreleased]: https://example.com/fridgeos/tree/master
