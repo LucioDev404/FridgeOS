@@ -5,11 +5,10 @@ Offline-first Android tablet application for managing household food inventory.
 FridgeOS lives on the kitchen tablet and answers four questions at a glance:
 **What do we have? Where is it? What expires soon? What can we cook / must we buy?**
 
-> **Status:** Phase 3 — Database & domain complete. On top of the Phase 2 shell,
-> the app now has a pure domain layer (entities, value objects, services), a
-> normalized Drift/SQLite schema with migrations and seeding, transactional
-> Drift-backed repositories, and SQLCipher-ready key management — all covered by
-> tests. Feature UIs follow the [roadmap](docs/11-roadmap.md).
+> **Status:** Feature-complete through Phase 10 (inventory, barcode, expiration,
+> recipes, shopping, statistics, encrypted backup, release docs). Quality gates:
+> format / analyze / test. See the [roadmap](docs/11-roadmap.md) and
+> [CHANGELOG](CHANGELOG.md).
 
 ---
 

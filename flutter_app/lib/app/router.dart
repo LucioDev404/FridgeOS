@@ -5,6 +5,7 @@ import 'package:fridgeos/features/expiration/presentation/expiring_screen.dart';
 import 'package:fridgeos/features/history/presentation/history_screen.dart';
 import 'package:fridgeos/features/inventory/presentation/home_screen.dart';
 import 'package:fridgeos/features/inventory/presentation/inventory_screen.dart';
+import 'package:fridgeos/features/locations/presentation/locations_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipes_screen.dart';
 import 'package:fridgeos/features/settings/presentation/settings_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_screen.dart';
@@ -38,6 +39,10 @@ GoRouter createRouter() {
         path: '/scan',
         pageBuilder: (context, state) =>
             const MaterialPage(fullscreenDialog: true, child: ScanScreen()),
+      ),
+      GoRoute(
+        path: '/locations',
+        builder: (context, state) => const LocationsScreen(),
       ),
     ],
   );

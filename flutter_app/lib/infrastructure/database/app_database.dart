@@ -97,4 +97,21 @@ class AppDatabase extends _$AppDatabase {
       updatedAt: now,
     );
   }
+
+  /// Re-inserts the three default storage locations after a factory reset.
+  Future<void> reseedDefaultLocations() async {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await batch((b) {
+      b.insertAll(locations, [
+        _seedLocation(
+          kDefaultFridgeId,
+          'Refrigerator',
+          LocationType.refrigerator,
+          now,
+        ),
+        _seedLocation(kDefaultFreezerId, 'Freezer', LocationType.freezer, now),
+        _seedLocation(kDefaultPantryId, 'Pantry', LocationType.pantry, now),
+      ], mode: InsertMode.insertOrReplace);
+    });
+  }
 }

@@ -5,6 +5,9 @@ import 'package:fridgeos/domain/entities/inventory_event.dart';
 import 'package:fridgeos/domain/entities/inventory_item.dart';
 import 'package:fridgeos/domain/entities/location.dart';
 import 'package:fridgeos/domain/entities/product.dart';
+import 'package:fridgeos/domain/entities/recipe.dart';
+import 'package:fridgeos/domain/entities/shopping_list_item.dart';
+import 'package:fridgeos/domain/entities/user_preferences.dart';
 import 'package:fridgeos/domain/value_objects/barcode.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
@@ -167,3 +170,143 @@ Map<String, String> _decodeMetadata(String? json) {
 
 String? _encodeMetadata(Map<String, String> metadata) =>
     metadata.isEmpty ? null : jsonEncode(metadata);
+
+List<String> _decodeStringList(String? json) {
+  if (json == null || json.isEmpty) return const <String>[];
+  final decoded = jsonDecode(json);
+  if (decoded is! List) return const <String>[];
+  return decoded.map((e) => '$e').toList();
+}
+
+String _encodeStringList(List<String> values) => jsonEncode(values);
+
+// ---------------------------------------------------------------------------
+// UserPreferences
+// ---------------------------------------------------------------------------
+
+UserPreferences preferencesFromRow(PreferencesRow row) => UserPreferences(
+  maxPrepTimeMinutes: row.maxPrepTimeMinutes,
+  favoriteTags: _decodeStringList(row.favoriteTagsJson),
+  blockedTags: _decodeStringList(row.blockedTagsJson),
+  expiringSoonWindowDays: row.expiringSoonWindowDays,
+  digestTime: row.digestTime,
+  enrichmentEnabled: row.enrichmentEnabled,
+  theme: row.theme,
+);
+
+PreferencesCompanion preferencesToCompanion(UserPreferences prefs) =>
+    PreferencesCompanion(
+      id: const Value(1),
+      maxPrepTimeMinutes: Value(prefs.maxPrepTimeMinutes),
+      favoriteTagsJson: Value(_encodeStringList(prefs.favoriteTags)),
+      blockedTagsJson: Value(_encodeStringList(prefs.blockedTags)),
+      expiringSoonWindowDays: Value(prefs.expiringSoonWindowDays),
+      digestTime: Value(prefs.digestTime),
+      enrichmentEnabled: Value(prefs.enrichmentEnabled),
+      theme: Value(prefs.theme),
+    );
+
+// ---------------------------------------------------------------------------
+// Recipe
+// ---------------------------------------------------------------------------
+
+Recipe recipeFromRow(RecipeRow row, List<RecipeIngredient> ingredients) =>
+    Recipe(
+      id: row.id,
+      title: row.title,
+      prepTimeMinutes: row.prepTimeMinutes,
+      steps: _decodeStringList(row.stepsJson),
+      tags: _decodeStringList(row.tagsJson),
+      source: RecipeSource.fromWire(row.source),
+      ingredients: ingredients,
+      createdAt: _dateTimeFromMs(row.createdAt),
+      updatedAt: _dateTimeFromMs(row.updatedAt),
+      deletedAt: row.deletedAt == null ? null : _dateTimeFromMs(row.deletedAt!),
+    );
+
+RecipeIngredient recipeIngredientFromRow(RecipeIngredientRow row) =>
+    RecipeIngredient(
+      id: row.id,
+      recipeId: row.recipeId,
+      productId: row.productId,
+      name: row.ingredientName,
+      quantity: row.quantityAmount == null || row.quantityUnit == null
+          ? null
+          : Quantity(
+              row.quantityAmount!,
+              MeasurementUnit.fromWire(row.quantityUnit!),
+            ),
+      optional: row.optional,
+    );
+
+RecipesCompanion recipeToCompanion(Recipe recipe) => RecipesCompanion(
+  id: Value(recipe.id),
+  title: Value(recipe.title),
+  prepTimeMinutes: Value(recipe.prepTimeMinutes),
+  stepsJson: Value(_encodeStringList(recipe.steps)),
+  tagsJson: Value(_encodeStringList(recipe.tags)),
+  source: Value(recipe.source.wire),
+  createdAt: Value(_msFromDateTime(recipe.createdAt)),
+  updatedAt: Value(_msFromDateTime(recipe.updatedAt)),
+  deletedAt: Value(
+    recipe.deletedAt == null ? null : _msFromDateTime(recipe.deletedAt!),
+  ),
+);
+
+RecipeIngredientsCompanion recipeIngredientToCompanion(
+  RecipeIngredient ingredient,
+) => RecipeIngredientsCompanion(
+  id: Value(ingredient.id),
+  recipeId: Value(ingredient.recipeId),
+  productId: Value(ingredient.productId),
+  ingredientName: Value(ingredient.name),
+  quantityAmount: Value(ingredient.quantity?.amount),
+  quantityUnit: Value(ingredient.quantity?.unit.wire),
+  optional: Value(ingredient.optional),
+);
+
+// ---------------------------------------------------------------------------
+// ShoppingListItem
+// ---------------------------------------------------------------------------
+
+ShoppingListItem shoppingListItemFromRow(ShoppingListItemRow row) =>
+    ShoppingListItem(
+      id: row.id,
+      name: row.name,
+      productId: row.productId,
+      quantity: row.quantityAmount == null || row.quantityUnit == null
+          ? null
+          : Quantity(
+              row.quantityAmount!,
+              MeasurementUnit.fromWire(row.quantityUnit!),
+            ),
+      origin: ShoppingItemOrigin.fromWire(row.origin),
+      status: ShoppingItemStatus.fromWire(row.status),
+      dismissedUntil: row.dismissedUntil == null
+          ? null
+          : _dateTimeFromMs(row.dismissedUntil!),
+      createdAt: _dateTimeFromMs(row.createdAt),
+      updatedAt: _dateTimeFromMs(row.updatedAt),
+      deletedAt: row.deletedAt == null ? null : _dateTimeFromMs(row.deletedAt!),
+    );
+
+ShoppingListItemsCompanion shoppingListItemToCompanion(ShoppingListItem item) =>
+    ShoppingListItemsCompanion(
+      id: Value(item.id),
+      name: Value(item.name),
+      productId: Value(item.productId),
+      quantityAmount: Value(item.quantity?.amount),
+      quantityUnit: Value(item.quantity?.unit.wire),
+      origin: Value(item.origin.wire),
+      status: Value(item.status.wire),
+      dismissedUntil: Value(
+        item.dismissedUntil == null
+            ? null
+            : _msFromDateTime(item.dismissedUntil!),
+      ),
+      createdAt: Value(_msFromDateTime(item.createdAt)),
+      updatedAt: Value(_msFromDateTime(item.updatedAt)),
+      deletedAt: Value(
+        item.deletedAt == null ? null : _msFromDateTime(item.deletedAt!),
+      ),
+    );
