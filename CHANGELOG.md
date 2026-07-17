@@ -37,5 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Android release APK build: enable core library desugaring required by
   `flutter_local_notifications`.
+- Android release APK build: raise `compileSdk` to 36 (app + Android library
+  plugins) so `file_picker` / `flutter_plugin_android_lifecycle` AAR metadata
+  checks pass.
 
 [Unreleased]: https://github.com/LucioDev404/FridgeOS
