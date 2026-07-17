@@ -1,0 +1,36 @@
+# Flutter / Dart
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/build/
+flutter_app/.pub-cache/
+flutter_app/.pub/
+coverage/
+*.lcov
+
+# Generated sources (regenerated via scripts/gen.sh and in CI)
+flutter_app/lib/l10n/gen/
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart
+
+# Android
+flutter_app/android/.gradle/
+flutter_app/android/local.properties
+flutter_app/android/**/gradle-wrapper.jar
+flutter_app/android/key.properties
+**/*.keystore
+**/*.jks
+
+# Secrets / signing — NEVER commit
+*.env
+secrets/
+*.p12
+*.pem
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db

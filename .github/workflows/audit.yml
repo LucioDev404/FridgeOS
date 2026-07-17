@@ -1,0 +1,62 @@
+name: Security audit
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Weekly dependency drift / vulnerability check.
+    - cron: "0 6 * * 1"
+
+env:
+  FLUTTER_VERSION: "3.44.1"
+
+jobs:
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency & privacy audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Report outdated dependencies
+        run: flutter pub outdated || true
+
+      - name: Fail on known telemetry/analytics SDKs
+        # Privacy guarantee (docs/09-security-design.md §8): none of these
+        # tracking SDKs may ever enter the dependency graph.
+        run: |
+          set -euo pipefail
+          denylist="firebase_analytics google_analytics amplitude mixpanel sentry_flutter appcenter_analytics facebook_app_events segment"
+          found=0
+          for pkg in $denylist; do
+            if grep -qE "^\s*$pkg:" pubspec.yaml; then
+              echo "::error::Forbidden telemetry dependency present: $pkg"
+              found=1
+            fi
+          done
+          exit $found

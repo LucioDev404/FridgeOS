@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security policy (see docs/09-security-design.md §3).
+  Cleartext traffic is disabled everywhere; only the OpenFoodFacts host is used,
+  over HTTPS, and only when the user opts into enrichment.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">openfoodfacts.org</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,66 @@
+name: fridgeos
+description: "Offline-first household food inventory for Android tablets."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+# Direct dependencies are intentionally minimal (see docs/09-security-design.md
+# §12 and docs/03-non-functional-requirements.md NFR-MAINT-5). Exact resolved
+# versions are pinned via the committed pubspec.lock.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management + dependency injection.
+  flutter_riverpod: ^3.3.2
+
+  # Declarative navigation.
+  go_router: ^17.3.0
+
+  # Local database (SQLite). sqlite3 3.x bundles the native library via build
+  # hooks, so no extra platform package is required.
+  drift: ^2.34.2
+  sqlite3: ^3.4.0
+  path_provider: ^2.1.6
+  path: ^1.9.1
+
+  # Keystore-backed secure storage for encryption keys.
+  flutter_secure_storage: ^10.3.1
+
+  # HTTPS client for OpenFoodFacts enrichment (opt-in, single egress).
+  http: ^1.6.0
+
+  # Immutable identifiers.
+  uuid: ^4.6.0
+
+  # i18n / date & number formatting.
+  intl: ^0.20.2
+
+  # On-device barcode scanning (added now; wired in Phase 5).
+  google_mlkit_barcode_scanning: ^0.15.0
+
+  # On-device expiration notifications (added now; wired in Phase 6).
+  flutter_local_notifications: ^22.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+  # Drift code generation.
+  drift_dev: ^2.34.0
+  build_runner: ^2.15.1
+
+  # Test doubles.
+  mocktail: ^1.0.5
+
+flutter:
+  uses-material-design: true
+  generate: true
