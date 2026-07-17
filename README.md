@@ -1,5 +1,9 @@
 # FridgeOS
 
+<p align="center">
+  <img src="flutter_app/assets/branding/app_icon_readme.png" alt="FridgeOS app icon" width="160" height="160">
+</p>
+
 Offline-first Android tablet application for managing household food inventory.
 
 FridgeOS lives on the kitchen tablet and answers four questions at a glance:
@@ -38,14 +42,17 @@ FridgeOS lives on the kitchen tablet and answers four questions at a glance:
 ## Repository layout
 
 ```
-docs/                 Product, architecture and security documentation (Phase 1)
-flutter_app/          Flutter application (created in Phase 2)
+docs/                 Product, architecture and security documentation
+flutter_app/          Flutter application
+  assets/branding/    App icon source (+ README preview)
+  android/.../res/    Generated launcher mipmaps (`ic_launcher`)
   test/               Unit & widget tests
   integration_test/   End-to-end / integration tests
 scripts/              Developer & CI helper scripts
 .github/workflows/    CI/CD pipelines (format, analyze, test, audit, build)
 README.md
 CHANGELOG.md
+LICENSE
 ```
 
 ## Documentation index
