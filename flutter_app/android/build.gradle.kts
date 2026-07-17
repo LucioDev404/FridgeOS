@@ -19,17 +19,6 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Plugins such as file_picker still declare compileSdk 34 while transitive
-// AndroidX / flutter_plugin_android_lifecycle require 36. Align every Android
-// library module so :checkReleaseAarMetadata succeeds in CI.
-subprojects {
-    pluginManager.withPlugin("com.android.library") {
-        extensions.configure<com.android.build.gradle.LibraryExtension>("android") {
-            compileSdk = 36
-        }
-    }
-}
-
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

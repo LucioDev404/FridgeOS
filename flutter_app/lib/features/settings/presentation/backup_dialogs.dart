@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
+import 'package:path/path.dart' as p;
 
 /// Collects a backup passphrase (export/import).
 Future<String?> showPassphraseDialog(
@@ -112,6 +115,59 @@ class _PassphraseDialogState extends State<_PassphraseDialog> {
       ],
     );
   }
+}
+
+/// Lets the user pick a previously exported backup from the app backups folder.
+Future<File?> showBackupPickerDialog(
+  BuildContext context, {
+  required List<File> files,
+}) {
+  final l10n = AppLocalizations.of(context);
+  if (files.isEmpty) {
+    return showDialog<File>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.settingsImportBackup),
+        content: Text(l10n.settingsNoBackupsFound),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  return showModalBottomSheet<File>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Text(
+              l10n.settingsChooseBackup,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          for (final file in files)
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: Text(p.basename(file.path)),
+              onTap: () => Navigator.of(context).pop(file),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Confirms destructive factory reset.

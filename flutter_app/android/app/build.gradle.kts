@@ -19,8 +19,7 @@ if (hasReleaseSigning) {
 
 android {
     namespace = "com.fridgeos.fridgeos"
-    // file_picker → flutter_plugin_android_lifecycle requires API 36+ for AAR
-    // metadata checks. Keep at least 36 even if Flutter's default is lower.
+    // Prefer Flutter's default; keep a floor of 36 for current AndroidX plugins.
     compileSdk = maxOf(flutter.compileSdkVersion, 36)
     ndkVersion = flutter.ndkVersion
 

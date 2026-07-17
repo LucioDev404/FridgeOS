@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
@@ -8,11 +7,14 @@ import 'package:fridgeos/features/expiration/application/expiration_providers.da
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/settings/application/settings_actions.dart';
 import 'package:fridgeos/features/settings/presentation/backup_dialogs.dart';
+import 'package:fridgeos/infrastructure/backup/backup_file_store.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 
 /// Settings: enrichment toggle, expiration window, backup, and factory reset.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  static const _files = BackupFileStore();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,8 +80,10 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(l10n.settingsEnrichmentEnabled),
             subtitle: Text(l10n.settingsEnrichmentBody),
             value: prefs.enrichmentEnabled,
-            onChanged: (value) =>
-                runWithFeedback(context, actions.setEnrichmentEnabled(value)),
+            onChanged: (value) => runWithFeedback(
+              context,
+              actions.setEnrichmentEnabled(value),
+            ),
           ),
           const Divider(height: AppSpacing.xl),
           Text(
@@ -166,18 +170,20 @@ class SettingsScreen extends ConsumerWidget {
       ':',
       '-',
     );
-    final saved = await FilePicker.platform.saveFile(
-      dialogTitle: l10n.settingsExportBackup,
-      fileName: 'fridgeos-backup-$timestamp.json',
-      bytes: result.valueOrNull,
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-    );
-    if (!context.mounted) return;
-    if (saved == null) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.settingsBackupExported)));
+    try {
+      final file = await _files.writeBackup(
+        result.valueOrNull!,
+        fileName: 'fridgeos-backup-$timestamp.json',
+      );
+      await _files.shareBackup(file);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.settingsBackupExported)),
+      );
+    } on Object {
+      if (!context.mounted) return;
+      showActionFailure(context, l10n.actionFailed);
+    }
   }
 
   Future<void> _importBackup(
@@ -185,20 +191,11 @@ class SettingsScreen extends ConsumerWidget {
     SettingsActions actions,
     AppLocalizations l10n,
   ) async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
-      withData: true,
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final bytes = picked.files.single.bytes;
-    if (bytes == null) {
-      if (!context.mounted) return;
-      showActionFailure(context, l10n.actionFailed);
-      return;
-    }
-
+    final backups = await _files.listBackups();
     if (!context.mounted) return;
+    final picked = await showBackupPickerDialog(context, files: backups);
+    if (picked == null || !context.mounted) return;
+
     final passphrase = await showPassphraseDialog(
       context,
       title: l10n.settingsImportBackup,
@@ -206,10 +203,17 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (passphrase == null || !context.mounted) return;
 
-    await runWithFeedback(
-      context,
-      actions.importBackup(Uint8List.fromList(bytes), passphrase),
-    );
+    try {
+      final bytes = await picked.readAsBytes();
+      if (!context.mounted) return;
+      await runWithFeedback(
+        context,
+        actions.importBackup(Uint8List.fromList(bytes), passphrase),
+      );
+    } on Object {
+      if (!context.mounted) return;
+      showActionFailure(context, l10n.actionFailed);
+    }
   }
 
   Future<void> _factoryReset(

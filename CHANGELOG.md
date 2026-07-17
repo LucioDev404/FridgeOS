@@ -40,5 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Android release APK build: raise `compileSdk` to 36 (app + Android library
   plugins) so `file_picker` / `flutter_plugin_android_lifecycle` AAR metadata
   checks pass.
+- Android release APK build: remove `file_picker` (compileSdk 34 + lifecycle
+  metadata conflict) and use app-private backup files + `share_plus` instead.
 
 [Unreleased]: https://github.com/LucioDev404/FridgeOS
