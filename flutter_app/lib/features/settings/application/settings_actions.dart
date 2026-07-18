@@ -6,6 +6,7 @@ import 'package:fridgeos/core/result.dart';
 import 'package:fridgeos/data/providers.dart';
 import 'package:fridgeos/domain/entities/user_preferences.dart';
 import 'package:fridgeos/domain/repositories/preferences_repository.dart';
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
 import 'package:fridgeos/features/expiration/application/expiration_providers.dart';
 import 'package:fridgeos/features/expiration/application/notification_scheduler.dart';
 import 'package:fridgeos/features/inventory/application/inventory_line_item.dart';
@@ -52,6 +53,14 @@ final class SettingsActions {
     return scheduler.scheduleExpirationDigest(
       items: expiringItems,
       digestTime: current.valueOrNull!.digestTime,
+    );
+  }
+
+  Future<Result<void>> setDietPreference(DietPreference diet) async {
+    final current = await _currentPreferences();
+    if (current.isFailure) return Result.failure(current.failureOrNull!);
+    return preferences.save(
+      current.valueOrNull!.copyWith(dietPreference: diet),
     );
   }
 

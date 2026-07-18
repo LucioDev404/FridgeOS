@@ -1,3 +1,5 @@
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
+
 /// User preferences (a single-row aggregate). Defaults are chosen so the app is
 /// fully functional out of the box (see docs/06-database-design.md §3.10).
 final class UserPreferences {
@@ -9,6 +11,7 @@ final class UserPreferences {
     this.digestTime = '09:00',
     this.enrichmentEnabled = true,
     this.theme = 'system',
+    this.dietPreference = DietPreference.omnivore,
   });
 
   /// Optional cap used by recipe ranking (see docs/05-domain-model.md §6).
@@ -28,6 +31,9 @@ final class UserPreferences {
   /// `system`, `light` or `dark`.
   final String theme;
 
+  /// Recipe diet filter (persisted, schema v4+).
+  final DietPreference dietPreference;
+
   UserPreferences copyWith({
     int? maxPrepTimeMinutes,
     List<String>? favoriteTags,
@@ -36,6 +42,7 @@ final class UserPreferences {
     String? digestTime,
     bool? enrichmentEnabled,
     String? theme,
+    DietPreference? dietPreference,
   }) {
     return UserPreferences(
       maxPrepTimeMinutes: maxPrepTimeMinutes ?? this.maxPrepTimeMinutes,
@@ -46,6 +53,7 @@ final class UserPreferences {
       digestTime: digestTime ?? this.digestTime,
       enrichmentEnabled: enrichmentEnabled ?? this.enrichmentEnabled,
       theme: theme ?? this.theme,
+      dietPreference: dietPreference ?? this.dietPreference,
     );
   }
 }

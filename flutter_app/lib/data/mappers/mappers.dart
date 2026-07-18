@@ -10,6 +10,7 @@ import 'package:fridgeos/domain/entities/shopping_list_item.dart';
 import 'package:fridgeos/domain/entities/user_preferences.dart';
 import 'package:fridgeos/domain/value_objects/barcode.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 import 'package:fridgeos/domain/value_objects/quantity.dart';
 import 'package:fridgeos/infrastructure/database/app_database.dart';
@@ -192,6 +193,7 @@ UserPreferences preferencesFromRow(PreferencesRow row) => UserPreferences(
   digestTime: row.digestTime,
   enrichmentEnabled: row.enrichmentEnabled,
   theme: row.theme,
+  dietPreference: DietPreference.fromWire(row.dietPreference),
 );
 
 PreferencesCompanion preferencesToCompanion(UserPreferences prefs) =>
@@ -204,6 +206,7 @@ PreferencesCompanion preferencesToCompanion(UserPreferences prefs) =>
       digestTime: Value(prefs.digestTime),
       enrichmentEnabled: Value(prefs.enrichmentEnabled),
       theme: Value(prefs.theme),
+      dietPreference: Value(prefs.dietPreference.wire),
     );
 
 // ---------------------------------------------------------------------------

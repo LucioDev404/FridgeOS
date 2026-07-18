@@ -1,6 +1,8 @@
 import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/services/expiration_policy.dart';
+import 'package:fridgeos/domain/services/ingredient_lexicon.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 
 /// Optional ranking preferences (subset of [UserPreferences]).
@@ -11,6 +13,7 @@ final class RecipeRankingPreferences {
     this.blockedTags = const <String>[],
     this.expiringSoonWindowDays = 3,
     this.preferredCuisines = const <String>[],
+    this.diet = DietPreference.omnivore,
   });
 
   final int? maxPrepTimeMinutes;
@@ -18,6 +21,7 @@ final class RecipeRankingPreferences {
   final List<String> blockedTags;
   final int expiringSoonWindowDays;
   final List<String> preferredCuisines;
+  final DietPreference diet;
 }
 
 /// A product's available stock for recipe matching.
@@ -136,30 +140,21 @@ final class RecipeMatch {
 
 /// Ranks recipes against real inventory with strict matching rules.
 ///
-/// * **Exact** — productId or normalized name equality (incl. simple plurals).
+/// * **Exact** — productId, multilingual canonical id, or simple plural.
 /// * **Substitution** — only names listed on the ingredient.
-/// * **Partial** — shared significant token (shown, never scored as available).
+/// * **Partial** — related forms (tomato vs tomato sauce), never scored as stock.
 /// * Optional ingredients never reduce completion.
+/// * Diet preference hard-filters incompatible recipes.
 final class RecipeRanker {
-  const RecipeRanker([this._expirationPolicy = const ExpirationPolicy()]);
+  const RecipeRanker([
+    this._expirationPolicy = const ExpirationPolicy(),
+    this._lexicon = const IngredientLexicon(),
+    this._dietPolicy = const RecipeDietPolicy(),
+  ]);
 
   final ExpirationPolicy _expirationPolicy;
-
-  static const _stopTokens = {
-    'fresh',
-    'dried',
-    'ground',
-    'whole',
-    'free',
-    'range',
-    'organic',
-    'extra',
-    'virgin',
-    'sauce',
-    'paste',
-    'chopped',
-    'sliced',
-  };
+  final IngredientLexicon _lexicon;
+  final RecipeDietPolicy _dietPolicy;
 
   List<RecipeMatch> rank({
     required List<Recipe> recipes,
@@ -178,18 +173,33 @@ final class RecipeRanker {
       final maxPrep = preferences.maxPrepTimeMinutes;
       if (maxPrep != null && recipe.prepTimeMinutes > maxPrep) continue;
 
+      if (!_dietPolicy.isCompatible(
+        tags: recipe.tags,
+        ingredientNames: recipe.ingredients.map((i) => i.name),
+        diet: preferences.diet,
+      )) {
+        continue;
+      }
+
       final match = _buildMatch(
         recipe: recipe,
         stock: stock,
         preferences: preferences,
         today: referenceToday,
       );
-      if (match.requiredCount > 0 && match.availableCount == 0) continue;
+      if (!_isRelevant(match)) continue;
       matches.add(match);
     }
 
     matches.sort(_compareMatches);
-    return matches;
+    return _diversifyCuisines(matches);
+  }
+
+  /// Drops weak single-ingredient hits on large recipes.
+  bool _isRelevant(RecipeMatch match) {
+    if (match.availableCount == 0) return false;
+    if (match.requiredCount <= 2) return true;
+    return match.availableCount >= 2 || match.completionRatio >= 0.5;
   }
 
   RecipeMatch? evaluate({
@@ -203,6 +213,14 @@ final class RecipeRanker {
 
     final maxPrep = preferences.maxPrepTimeMinutes;
     if (maxPrep != null && recipe.prepTimeMinutes > maxPrep) return null;
+
+    if (!_dietPolicy.isCompatible(
+      tags: recipe.tags,
+      ingredientNames: recipe.ingredients.map((i) => i.name),
+      diet: preferences.diet,
+    )) {
+      return null;
+    }
 
     return _buildMatch(
       recipe: recipe,
@@ -220,22 +238,53 @@ final class RecipeRanker {
     return detail.countsAsAvailable;
   }
 
+  /// Priority: availability → expiry → fewer missing → score (cuisine/prefs) → title.
+  /// Diet is applied as a hard filter before ranking.
   int _compareMatches(RecipeMatch a, RecipeMatch b) {
     final byCompletion = b.completionRatio.compareTo(a.completionRatio);
     if (byCompletion != 0) return byCompletion;
-
-    final byMissing = a.missingCount.compareTo(b.missingCount);
-    if (byMissing != 0) return byMissing;
 
     final byExpiring = b.expiringAvailableCount.compareTo(
       a.expiringAvailableCount,
     );
     if (byExpiring != 0) return byExpiring;
 
+    final byMissing = a.missingCount.compareTo(b.missingCount);
+    if (byMissing != 0) return byMissing;
+
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) return byScore;
+
     final byPrep = a.recipe.prepTimeMinutes.compareTo(b.recipe.prepTimeMinutes);
     if (byPrep != 0) return byPrep;
 
     return a.recipe.title.compareTo(b.recipe.title);
+  }
+
+  /// Soft cuisine variety: within the same completion band, avoid long runs
+  /// of a single cuisine so browsing feels more like a curated feed.
+  List<RecipeMatch> _diversifyCuisines(List<RecipeMatch> ranked) {
+    if (ranked.length < 3) return ranked;
+
+    final remaining = List<RecipeMatch>.of(ranked);
+    final result = <RecipeMatch>[];
+    String? lastCuisine;
+
+    while (remaining.isNotEmpty) {
+      final index = remaining.indexWhere((m) {
+        final cuisine = m.recipe.cuisine?.toLowerCase();
+        if (cuisine == null || cuisine.isEmpty) return true;
+        if (lastCuisine == null) return true;
+        if (cuisine == lastCuisine) return false;
+        // Only swap within a close completion band.
+        final head = remaining.first;
+        return (head.completionRatio - m.completionRatio).abs() <= 0.15;
+      });
+      final pick = index >= 0 ? remaining.removeAt(index) : remaining.removeAt(0);
+      result.add(pick);
+      lastCuisine = pick.recipe.cuisine?.toLowerCase();
+    }
+    return result;
   }
 
   bool _hasBlockedTag(Recipe recipe, List<String> blockedTags) {
@@ -309,14 +358,14 @@ final class RecipeRanker {
           ingredientName: ingredient.name,
           kind: IngredientMatchKind.exact,
           optional: ingredient.optional,
-          matchedProductName: byId.normalizedName,
+          matchedProductName: byId.displayName ?? byId.normalizedName,
           locations: byId.locations,
         );
       }
     }
 
-    final needle = _normalizeName(ingredient.name);
-    if (needle.isEmpty) {
+    final ingredientLabel = ingredient.name.trim();
+    if (ingredientLabel.isEmpty) {
       return IngredientMatchDetail(
         ingredientName: ingredient.name,
         kind: IngredientMatchKind.missing,
@@ -324,36 +373,37 @@ final class RecipeRanker {
       );
     }
 
-    // Exact name / simple plural.
+    // Exact via multilingual lexicon / plurals.
     for (final entry in stock.entries) {
       if (entry.value.amount <= 0) continue;
-      final name = entry.value.normalizedName;
-      if (name == null) continue;
-      if (_isExactNameMatch(needle, name)) {
+      final productLabel =
+          entry.value.displayName ?? entry.value.normalizedName;
+      if (productLabel == null || productLabel.isEmpty) continue;
+      if (_lexicon.isExactMatch(ingredientLabel, productLabel)) {
         return IngredientMatchDetail(
           ingredientName: ingredient.name,
           kind: IngredientMatchKind.exact,
           optional: ingredient.optional,
-          matchedProductName: entry.value.displayName ?? name,
+          matchedProductName: entry.value.displayName ?? productLabel,
           locations: entry.value.locations,
         );
       }
     }
 
-    // Explicit substitutions only.
+    // Explicit substitutions (also multilingual).
     for (final sub in ingredient.substitutions) {
-      final subNeedle = _normalizeName(sub);
-      if (subNeedle.isEmpty) continue;
+      if (sub.trim().isEmpty) continue;
       for (final entry in stock.entries) {
         if (entry.value.amount <= 0) continue;
-        final name = entry.value.normalizedName;
-        if (name == null) continue;
-        if (_isExactNameMatch(subNeedle, name)) {
+        final productLabel =
+            entry.value.displayName ?? entry.value.normalizedName;
+        if (productLabel == null) continue;
+        if (_lexicon.isExactMatch(sub, productLabel)) {
           return IngredientMatchDetail(
             ingredientName: ingredient.name,
             kind: IngredientMatchKind.substitution,
             optional: ingredient.optional,
-            matchedProductName: entry.value.displayName ?? name,
+            matchedProductName: entry.value.displayName ?? productLabel,
             substitutionUsed: sub,
             locations: entry.value.locations,
           );
@@ -361,19 +411,18 @@ final class RecipeRanker {
       }
     }
 
-    // Partial: shared significant token — informational only.
-    final needleTokens = _significantTokens(needle);
+    // Partial: related forms only (tomato ↔ tomato sauce), never stock.
     for (final entry in stock.entries) {
       if (entry.value.amount <= 0) continue;
-      final name = entry.value.normalizedName;
-      if (name == null) continue;
-      final stockTokens = _significantTokens(name);
-      if (needleTokens.any(stockTokens.contains)) {
+      final productLabel =
+          entry.value.displayName ?? entry.value.normalizedName;
+      if (productLabel == null) continue;
+      if (_lexicon.isRelated(ingredientLabel, productLabel)) {
         return IngredientMatchDetail(
           ingredientName: ingredient.name,
           kind: IngredientMatchKind.partial,
           optional: ingredient.optional,
-          matchedProductName: entry.value.displayName ?? name,
+          matchedProductName: entry.value.displayName ?? productLabel,
           locations: entry.value.locations,
         );
       }
@@ -395,43 +444,12 @@ final class RecipeRanker {
     final needle = _normalizeName(matched);
     for (final entry in stock.values) {
       if (entry.normalizedName == needle) return entry;
-    }
-    return null;
-  }
-
-  bool _isExactNameMatch(String a, String b) {
-    if (a == b) return true;
-    final formsA = _pluralForms(a);
-    final formsB = _pluralForms(b);
-    return formsA.any(formsB.contains);
-  }
-
-  Set<String> _pluralForms(String normalized) {
-    final forms = <String>{normalized};
-    if (normalized.endsWith('ies') && normalized.length > 4) {
-      forms.add('${normalized.substring(0, normalized.length - 3)}y');
-    } else if (normalized.endsWith('oes') && normalized.length > 4) {
-      forms.add(normalized.substring(0, normalized.length - 2));
-    } else if (normalized.endsWith('s') &&
-        !normalized.endsWith('ss') &&
-        normalized.length > 3) {
-      forms.add(normalized.substring(0, normalized.length - 1));
-    } else {
-      forms.add('${normalized}s');
-      if (normalized.endsWith('y') && normalized.length > 2) {
-        forms.add('${normalized.substring(0, normalized.length - 1)}ies');
+      if (entry.displayName != null &&
+          _normalizeName(entry.displayName!) == needle) {
+        return entry;
       }
     }
-    return forms;
-  }
-
-  Set<String> _significantTokens(String normalized) {
-    final tokens = <String>{};
-    for (final raw in normalized.split(' ')) {
-      if (raw.length < 4 || _stopTokens.contains(raw)) continue;
-      tokens.addAll(_pluralForms(raw));
-    }
-    return tokens;
+    return null;
   }
 
   String _normalizeName(String value) =>

@@ -45,6 +45,7 @@ class RecipeDetailScreen extends ConsumerWidget {
               child: RecipeImage(
                 imageUrl: recipe.imageUrl,
                 cuisine: recipe.cuisine,
+                size: RecipeImageSize.hero,
                 borderRadius: BorderRadius.zero,
               ),
             ),

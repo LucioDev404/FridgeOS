@@ -4,10 +4,13 @@ import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
+import 'package:fridgeos/features/expiration/application/expiration_providers.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/recipes/application/recipe_actions.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
 import 'package:fridgeos/features/recipes/presentation/widgets/recipe_image.dart';
+import 'package:fridgeos/features/settings/application/settings_actions.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,29 +22,88 @@ class RecipesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final matchesAsync = ref.watch(rankedRecipesProvider);
-    final actions = ref.read(recipeActionsProvider);
+    final prefsAsync = ref.watch(userPreferencesProvider);
+    final diet = prefsAsync.value?.dietPreference ?? DietPreference.omnivore;
 
-    return matchesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) => Center(child: Text(l10n.actionFailed)),
-      data: (matches) {
-        if (matches.isEmpty) {
-          return EmptyState(
-            icon: Icons.restaurant_menu_outlined,
-            title: l10n.recipesEmptyTitle,
-            body: l10n.recipesEmptyBody,
-          );
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          itemCount: matches.length,
-          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-          itemBuilder: (context, index) {
-            final match = matches[index];
-            return _RecipeCard(match: match, actions: actions);
-          },
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.recipeDietLabel,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SegmentedButton<DietPreference>(
+                segments: [
+                  ButtonSegment(
+                    value: DietPreference.omnivore,
+                    label: Text(l10n.dietOmnivore),
+                    icon: const Icon(Icons.restaurant),
+                  ),
+                  ButtonSegment(
+                    value: DietPreference.vegetarian,
+                    label: Text(l10n.dietVegetarian),
+                    icon: const Icon(Icons.eco_outlined),
+                  ),
+                  ButtonSegment(
+                    value: DietPreference.vegan,
+                    label: Text(l10n.dietVegan),
+                    icon: const Icon(Icons.spa_outlined),
+                  ),
+                ],
+                selected: {diet},
+                onSelectionChanged: (next) async {
+                  final value = next.first;
+                  final result = await ref
+                      .read(settingsActionsProvider)
+                      .setDietPreference(value);
+                  if (!context.mounted) return;
+                  if (result.isFailure) {
+                    showActionFailure(context, l10n.actionFailed);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: matchesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => Center(child: Text(l10n.actionFailed)),
+            data: (matches) {
+              if (matches.isEmpty) {
+                return EmptyState(
+                  icon: Icons.restaurant_menu_outlined,
+                  title: l10n.recipesEmptyTitle,
+                  body: l10n.recipesEmptyBody,
+                );
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                itemCount: matches.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: AppSpacing.md),
+                itemBuilder: (context, index) {
+                  final match = matches[index];
+                  return _RecipeCard(
+                    match: match,
+                    actions: ref.read(recipeActionsProvider),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -62,6 +124,7 @@ class _RecipeCard extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       clipBehavior: Clip.antiAlias,
+      elevation: 0,
       child: InkWell(
         onTap: () => context.push('/recipes/${recipe.id}'),
         child: Column(
@@ -75,6 +138,7 @@ class _RecipeCard extends StatelessWidget {
                   RecipeImage(
                     imageUrl: recipe.imageUrl,
                     cuisine: recipe.cuisine,
+                    size: RecipeImageSize.thumbnail,
                     borderRadius: BorderRadius.zero,
                   ),
                   Positioned(

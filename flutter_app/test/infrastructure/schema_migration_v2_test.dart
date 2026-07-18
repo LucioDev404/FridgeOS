@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
-  test('migrates v1 database to v3 without losing product rows', () async {
+  test('migrates v1 database to v4 without losing product rows', () async {
     final dir = await Directory.systemTemp.createTemp('fridgeos-mig-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File(p.join(dir.path, 'fridgeos.sqlite'));
@@ -193,6 +193,6 @@ void main() {
     final meta = await (db.select(
       db.appMeta,
     )..where((t) => t.key.equals('schema_version'))).getSingle();
-    expect(meta.value, '3');
+    expect(meta.value, '4');
   });
 }

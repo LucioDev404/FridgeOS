@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
+import 'package:fridgeos/domain/value_objects/diet_preference.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 
 void main() {
@@ -269,7 +270,7 @@ void main() {
       );
     });
 
-    test('ranks by completion then missing then expiring then prep time', () {
+    test('ranks by completion then expiring then missing then prep time', () {
       final partial = recipe(
         id: 'r1',
         title: 'Partial',
@@ -329,6 +330,95 @@ void main() {
         'Complete Slow',
         'Partial',
       ]);
+    });
+
+    test('matches Italian inventory names to English recipe ingredients', () {
+      final pasta = recipe(
+        id: 'r1',
+        title: 'Tomato pasta',
+        cuisine: 'Italian',
+        ingredients: [
+          ingredient(id: 'i1', recipeId: 'r1', name: 'Pasta'),
+          ingredient(id: 'i2', recipeId: 'r1', name: 'Tomatoes'),
+          ingredient(id: 'i3', recipeId: 'r1', name: 'Olive oil'),
+        ],
+      );
+
+      final matches = ranker.rank(
+        recipes: [pasta],
+        inventory: const [
+          AvailableInventoryItem(
+            productId: 'p1',
+            amount: 1,
+            productName: 'Pasta',
+          ),
+          AvailableInventoryItem(
+            productId: 'p2',
+            amount: 2,
+            productName: 'Pomodoro',
+          ),
+          AvailableInventoryItem(
+            productId: 'p3',
+            amount: 1,
+            productName: 'Olio',
+          ),
+        ],
+        today: today,
+      );
+
+      expect(matches, hasLength(1));
+      expect(matches.single.isReadyToCook, isTrue);
+      expect(matches.single.completionPercent, 100);
+    });
+
+    test('vegan diet hides dairy recipes', () {
+      final cheesy = recipe(
+        id: 'r1',
+        title: 'Cheese bowl',
+        ingredients: [
+          ingredient(id: 'i1', recipeId: 'r1', name: 'Cheese'),
+          ingredient(id: 'i2', recipeId: 'r1', name: 'Vegetables'),
+        ],
+      );
+      final veg = recipe(
+        id: 'r2',
+        title: 'Rice bowl',
+        tags: const ['vegan'],
+        ingredients: [
+          ingredient(id: 'i3', recipeId: 'r2', name: 'Rice'),
+          ingredient(id: 'i4', recipeId: 'r2', name: 'Vegetables'),
+        ],
+      );
+
+      final matches = ranker.rank(
+        recipes: [cheesy, veg],
+        inventory: const [
+          AvailableInventoryItem(
+            productId: 'p1',
+            amount: 1,
+            productName: 'Latte',
+          ),
+          AvailableInventoryItem(
+            productId: 'p2',
+            amount: 1,
+            productName: 'Formaggio',
+          ),
+          AvailableInventoryItem(
+            productId: 'p3',
+            amount: 1,
+            productName: 'Verdure',
+          ),
+          AvailableInventoryItem(
+            productId: 'p4',
+            amount: 1,
+            productName: 'Riso',
+          ),
+        ],
+        preferences: const RecipeRankingPreferences(diet: DietPreference.vegan),
+        today: today,
+      );
+
+      expect(matches.map((m) => m.recipe.title), ['Rice bowl']);
     });
 
     test('eggplant does not match eggs (no false positive)', () {

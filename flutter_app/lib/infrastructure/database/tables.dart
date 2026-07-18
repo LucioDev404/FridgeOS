@@ -209,6 +209,10 @@ class Preferences extends Table {
       boolean().withDefault(const Constant(true))();
   TextColumn get theme => text().withDefault(const Constant('system'))();
 
+  /// Recipe diet preference wire value (schema v4): omnivore|vegetarian|vegan.
+  TextColumn get dietPreference =>
+      text().withDefault(const Constant('omnivore'))();
+
   @override
   Set<Column> get primaryKey => {id};
 

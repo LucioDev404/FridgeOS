@@ -116,6 +116,7 @@ final rankedRecipesProvider = Provider<AsyncValue<List<RecipeMatch>>>((ref) {
     favoriteTags: prefs.favoriteTags,
     blockedTags: prefs.blockedTags,
     expiringSoonWindowDays: window,
+    diet: prefs.dietPreference,
   );
 
   final matches = ranker.rank(
@@ -167,6 +168,7 @@ final recipeMatchProvider = Provider.family<AsyncValue<RecipeMatch?>, String>((
       favoriteTags: prefs.favoriteTags,
       blockedTags: prefs.blockedTags,
       expiringSoonWindowDays: window,
+      diet: prefs.dietPreference,
     ),
     today: today,
   );
