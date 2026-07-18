@@ -9,6 +9,7 @@ abstract interface class RecipeRepository {
   /// Persists [recipe] and its ingredients (replaces ingredient rows).
   Future<Result<void>> upsert(Recipe recipe);
 
-  /// Seeds built-in recipes when the table is empty. Idempotent.
+  /// Seeds missing built-in catalog recipes. Idempotent; never overwrites
+  /// existing recipe rows (supports future local edits / sync).
   Future<Result<void>> ensureBuiltinRecipes();
 }

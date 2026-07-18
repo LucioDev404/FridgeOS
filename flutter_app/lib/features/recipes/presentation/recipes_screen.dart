@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
+import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
@@ -71,11 +72,50 @@ class _RecipeCard extends StatelessWidget {
                   child: Text(recipe.title, style: theme.textTheme.titleMedium),
                 ),
                 Text(
+                  l10n.recipeCompletionPercent(match.completionPercent),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                if (recipe.difficulty != null) ...[
+                  Text(
+                    recipe.difficulty!.label(l10n),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    ' · ',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                Text(
                   l10n.recipePrepTime(recipe.prepTimeMinutes),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (recipe.servings != null) ...[
+                  Text(
+                    ' · ',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    l10n.recipeServings(recipe.servings!),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: AppSpacing.sm),

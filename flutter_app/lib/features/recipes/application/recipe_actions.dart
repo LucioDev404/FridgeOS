@@ -45,19 +45,7 @@ final class RecipeActions {
     DateOnly? today,
   }) async {
     final recipeList = await recipes.watchAll().first;
-    final catalog = await products.watchAll().first;
-    final namesById = {for (final product in catalog) product.id: product.name};
-    final available = items
-        .where((i) => i.isActive && i.quantity.amount > 0)
-        .map(
-          (i) => AvailableInventoryItem(
-            productId: i.productId,
-            productName: namesById[i.productId],
-            amount: i.quantity.amount,
-            expirationDate: i.expirationDate,
-          ),
-        )
-        .toList();
+    final available = await _availableInventory(items);
     return Result.success(
       ranker.rank(
         recipes: recipeList,
@@ -93,9 +81,13 @@ final class RecipeActions {
     return const Result.success(null);
   }
 
-  /// Best-effort consume of linked inventory for [recipe]'s available ingredients.
+  /// Best-effort consume of inventory for [recipe]'s available ingredients.
+  ///
+  /// Matches by linked [RecipeIngredient.productId] first, then by the same
+  /// fuzzy name matching used by [RecipeRanker].
   Future<Result<void>> cooked(Recipe recipe) async {
     final items = await inventory.watchActiveItems().first;
+    final available = await _availableInventory(items);
     final byProduct = <String, List<InventoryItem>>{};
     for (final item in items) {
       if (item.quantity.amount <= 0) continue;
@@ -103,15 +95,18 @@ final class RecipeActions {
     }
 
     for (final ingredient in recipe.requiredIngredients) {
-      final productId = ingredient.productId;
-      if (productId == null) continue;
+      if (!ranker.isIngredientAvailable(ingredient, available)) continue;
 
-      final stock = byProduct[productId];
-      if (stock == null || stock.isEmpty) continue;
+      final stockItems = _stockForIngredient(
+        ingredient: ingredient,
+        byProduct: byProduct,
+        available: available,
+      );
+      if (stockItems.isEmpty) continue;
 
       final amount = _consumeAmount(ingredient);
       var remaining = amount;
-      for (final item in stock) {
+      for (final item in stockItems) {
         if (remaining <= 0) break;
         final consumeAmount = remaining
             .clamp(0, item.quantity.amount)
@@ -127,6 +122,53 @@ final class RecipeActions {
       }
     }
     return const Result.success(null);
+  }
+
+  Future<List<AvailableInventoryItem>> _availableInventory(
+    List<InventoryItem> items,
+  ) async {
+    final catalog = await products.watchAll().first;
+    final namesById = {for (final product in catalog) product.id: product.name};
+    return items
+        .where((i) => i.isActive && i.quantity.amount > 0)
+        .map(
+          (i) => AvailableInventoryItem(
+            productId: i.productId,
+            productName: namesById[i.productId],
+            amount: i.quantity.amount,
+            expirationDate: i.expirationDate,
+          ),
+        )
+        .toList();
+  }
+
+  List<InventoryItem> _stockForIngredient({
+    required RecipeIngredient ingredient,
+    required Map<String, List<InventoryItem>> byProduct,
+    required List<AvailableInventoryItem> available,
+  }) {
+    final productId = ingredient.productId;
+    if (productId != null) {
+      return byProduct[productId] ?? const <InventoryItem>[];
+    }
+
+    final matchedIds = <String>{};
+    final probe = RecipeIngredient(
+      id: ingredient.id,
+      recipeId: ingredient.recipeId,
+      name: ingredient.name,
+    );
+    for (final stock in available) {
+      if (ranker.isIngredientAvailable(probe, [stock])) {
+        matchedIds.add(stock.productId);
+      }
+    }
+
+    final result = <InventoryItem>[];
+    for (final id in matchedIds) {
+      result.addAll(byProduct[id] ?? const <InventoryItem>[]);
+    }
+    return result;
   }
 
   double _consumeAmount(RecipeIngredient ingredient) {

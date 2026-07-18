@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
-import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
@@ -20,20 +19,13 @@ class RecipeDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final matchesAsync = ref.watch(rankedRecipesProvider);
+    final matchAsync = ref.watch(recipeMatchProvider(recipeId));
     final actions = ref.read(recipeActionsProvider);
 
-    return matchesAsync.when(
+    return matchAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => Center(child: Text(l10n.actionFailed)),
-      data: (matches) {
-        RecipeMatch? match;
-        for (final m in matches) {
-          if (m.recipe.id == recipeId) {
-            match = m;
-            break;
-          }
-        }
+      data: (match) {
         if (match == null) {
           return EmptyState(
             icon: Icons.restaurant_menu_outlined,
@@ -48,6 +40,23 @@ class RecipeDetailScreen extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.restaurant_menu_outlined,
+                    size: 56,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             Text(recipe.title, style: theme.textTheme.headlineSmall),
             const SizedBox(height: AppSpacing.md),
             Wrap(
@@ -65,12 +74,19 @@ class RecipeDetailScreen extends ConsumerWidget {
                   ),
                 Chip(
                   label: Text(
+                    l10n.recipeCompletionPercent(match.completionPercent),
+                  ),
+                ),
+                Chip(
+                  label: Text(
                     l10n.recipeAvailability(
                       match.availableCount,
                       match.requiredCount,
                     ),
                   ),
                 ),
+                for (final tag in recipe.tags)
+                  Chip(label: Text(tag), visualDensity: VisualDensity.compact),
               ],
             ),
             if (match.availableIngredientNames.isNotEmpty) ...[
@@ -89,7 +105,7 @@ class RecipeDetailScreen extends ConsumerWidget {
                   match.missingIngredientNames.join(', '),
                 ),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: theme.colorScheme.error,
                 ),
               ),
             ],
@@ -105,7 +121,14 @@ class RecipeDetailScreen extends ConsumerWidget {
                 leading: Icon(
                   ingredient.optional
                       ? Icons.radio_button_unchecked
-                      : Icons.check_circle_outline,
+                      : match.availableIngredientNames.contains(ingredient.name)
+                      ? Icons.check_circle
+                      : Icons.cancel_outlined,
+                  color: ingredient.optional
+                      ? theme.colorScheme.onSurfaceVariant
+                      : match.availableIngredientNames.contains(ingredient.name)
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.error,
                 ),
                 title: Text(ingredient.name),
                 subtitle: ingredient.quantity == null
@@ -137,7 +160,7 @@ class RecipeDetailScreen extends ConsumerWidget {
                   OutlinedButton.icon(
                     onPressed: () => runWithFeedback(
                       context,
-                      actions.addMissingToShopping(match!),
+                      actions.addMissingToShopping(match),
                     ),
                     icon: const Icon(Icons.add_shopping_cart_outlined),
                     label: Text(l10n.recipeAddMissing),

@@ -23,7 +23,7 @@ final recipeActionsProvider = Provider<RecipeActions>(
   ),
 );
 
-final _recipesProvider = StreamProvider<List<Recipe>>(
+final recipesListProvider = StreamProvider<List<Recipe>>(
   (ref) => ref.watch(recipeRepositoryProvider).watchAll(),
 );
 
@@ -35,27 +35,65 @@ final _productsForRecipesProvider = StreamProvider<List<Product>>(
   (ref) => ref.watch(productRepositoryProvider).watchAll(),
 );
 
+/// Live inventory rows with amount &gt; 0, named for recipe matching.
+final availableInventoryForRecipesProvider =
+    Provider<AsyncValue<List<AvailableInventoryItem>>>((ref) {
+      final itemsAsync = ref.watch(_inventoryItemsForRecipesProvider);
+      final productsAsync = ref.watch(_productsForRecipesProvider);
+
+      if (itemsAsync.isLoading || productsAsync.isLoading) {
+        return const AsyncValue.loading();
+      }
+      if (itemsAsync.hasError) {
+        return AsyncValue.error(itemsAsync.error!, itemsAsync.stackTrace!);
+      }
+      if (productsAsync.hasError) {
+        return AsyncValue.error(
+          productsAsync.error!,
+          productsAsync.stackTrace!,
+        );
+      }
+
+      final products = {
+        for (final product in productsAsync.value ?? const <Product>[])
+          product.id: product,
+      };
+      final items = itemsAsync.value ?? const [];
+      final available = items
+          .where((i) => i.isActive && i.quantity.amount > 0)
+          .map(
+            (i) => AvailableInventoryItem(
+              productId: i.productId,
+              productName: products[i.productId]?.name,
+              amount: i.quantity.amount,
+              expirationDate: i.expirationDate,
+            ),
+          )
+          .toList();
+      return AsyncValue.data(available);
+    });
+
 /// Ranked recipe matches derived from live recipes and inventory.
 final rankedRecipesProvider = Provider<AsyncValue<List<RecipeMatch>>>((ref) {
-  final recipesAsync = ref.watch(_recipesProvider);
-  final itemsAsync = ref.watch(_inventoryItemsForRecipesProvider);
+  final recipesAsync = ref.watch(recipesListProvider);
+  final availableAsync = ref.watch(availableInventoryForRecipesProvider);
   final prefsAsync = ref.watch(userPreferencesProvider);
   final today = ref.watch(todayProvider);
   final window = ref.watch(expiringSoonWindowProvider);
   final ranker = ref.watch(recipeRankerProvider);
 
-  if (recipesAsync.isLoading || itemsAsync.isLoading) {
+  if (recipesAsync.isLoading || availableAsync.isLoading) {
     return const AsyncValue.loading();
   }
   if (recipesAsync.hasError) {
     return AsyncValue.error(recipesAsync.error!, recipesAsync.stackTrace!);
   }
-  if (itemsAsync.hasError) {
-    return AsyncValue.error(itemsAsync.error!, itemsAsync.stackTrace!);
+  if (availableAsync.hasError) {
+    return AsyncValue.error(availableAsync.error!, availableAsync.stackTrace!);
   }
 
   final recipes = recipesAsync.value ?? const <Recipe>[];
-  final items = itemsAsync.value ?? const [];
+  final available = availableAsync.value ?? const <AvailableInventoryItem>[];
   final prefs = prefsAsync.value ?? const UserPreferences();
 
   final rankingPrefs = RecipeRankingPreferences(
@@ -65,24 +103,6 @@ final rankedRecipesProvider = Provider<AsyncValue<List<RecipeMatch>>>((ref) {
     expiringSoonWindowDays: window,
   );
 
-  final products = {
-    for (final product
-        in ref.watch(_productsForRecipesProvider).value ?? const <Product>[])
-      product.id: product,
-  };
-
-  final available = items
-      .where((i) => i.isActive && i.quantity.amount > 0)
-      .map(
-        (i) => AvailableInventoryItem(
-          productId: i.productId,
-          productName: products[i.productId]?.name,
-          amount: i.quantity.amount,
-          expirationDate: i.expirationDate,
-        ),
-      )
-      .toList();
-
   final matches = ranker.rank(
     recipes: recipes,
     inventory: available,
@@ -90,4 +110,50 @@ final rankedRecipesProvider = Provider<AsyncValue<List<RecipeMatch>>>((ref) {
     today: today,
   );
   return AsyncValue.data(matches);
+});
+
+/// Single recipe match for detail view (includes 0% completion recipes).
+final recipeMatchProvider = Provider.family<AsyncValue<RecipeMatch?>, String>((
+  ref,
+  recipeId,
+) {
+  final recipesAsync = ref.watch(recipesListProvider);
+  final availableAsync = ref.watch(availableInventoryForRecipesProvider);
+  final prefsAsync = ref.watch(userPreferencesProvider);
+  final today = ref.watch(todayProvider);
+  final window = ref.watch(expiringSoonWindowProvider);
+  final ranker = ref.watch(recipeRankerProvider);
+
+  if (recipesAsync.isLoading || availableAsync.isLoading) {
+    return const AsyncValue.loading();
+  }
+  if (recipesAsync.hasError) {
+    return AsyncValue.error(recipesAsync.error!, recipesAsync.stackTrace!);
+  }
+  if (availableAsync.hasError) {
+    return AsyncValue.error(availableAsync.error!, availableAsync.stackTrace!);
+  }
+
+  Recipe? recipe;
+  for (final r in recipesAsync.value ?? const <Recipe>[]) {
+    if (r.id == recipeId) {
+      recipe = r;
+      break;
+    }
+  }
+  if (recipe == null) return const AsyncValue.data(null);
+
+  final prefs = prefsAsync.value ?? const UserPreferences();
+  final match = ranker.evaluate(
+    recipe: recipe,
+    inventory: availableAsync.value ?? const <AvailableInventoryItem>[],
+    preferences: RecipeRankingPreferences(
+      maxPrepTimeMinutes: prefs.maxPrepTimeMinutes,
+      favoriteTags: prefs.favoriteTags,
+      blockedTags: prefs.blockedTags,
+      expiringSoonWindowDays: window,
+    ),
+    today: today,
+  );
+  return AsyncValue.data(match);
 });

@@ -9,6 +9,8 @@ import 'package:fridgeos/features/locations/presentation/locations_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipe_detail_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipes_screen.dart';
 import 'package:fridgeos/features/settings/presentation/settings_screen.dart';
+import 'package:fridgeos/features/shopping/presentation/shopping_qr_export_screen.dart';
+import 'package:fridgeos/features/shopping/presentation/shopping_qr_import_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_screen.dart';
 import 'package:fridgeos/features/statistics/presentation/statistics_detail_pages.dart';
 import 'package:fridgeos/features/statistics/presentation/statistics_screen.dart';
@@ -48,7 +50,24 @@ GoRouter createRouter() {
               ),
             ],
           ),
-          _branch('/shopping', const ShoppingScreen()),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/shopping',
+                builder: (context, state) => const ShoppingScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'qr-export',
+                    builder: (context, state) => const ShoppingQrExportScreen(),
+                  ),
+                  GoRoute(
+                    path: 'qr-import',
+                    builder: (context, state) => const ShoppingQrImportScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
           _branch('/history', const HistoryScreen()),
           StatefulShellBranch(
             routes: [

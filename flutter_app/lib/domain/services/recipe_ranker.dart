@@ -46,6 +46,7 @@ final class RecipeMatch {
     required this.availableIngredientNames,
     required this.availableCount,
     required this.requiredCount,
+    this.expiringAvailableCount = 0,
   });
 
   final Recipe recipe;
@@ -54,23 +55,63 @@ final class RecipeMatch {
   final List<String> availableIngredientNames;
   final int availableCount;
   final int requiredCount;
+  final int expiringAvailableCount;
 
   /// Completion ratio in `[0, 1]` (`availableCount / requiredCount`).
   double get completionRatio =>
       requiredCount == 0 ? 1.0 : availableCount / requiredCount;
+
+  /// Completion percentage rounded to the nearest integer (0–100).
+  int get completionPercent => (completionRatio * 100).round();
+
+  int get missingCount => missingIngredientNames.length;
 }
 
-/// Pure service that ranks recipes by stock coverage, preferences, and expiration
-/// urgency (see FR-REC-2/3, docs/05-domain-model.md §6).
+/// Pure service that ranks recipes by stock coverage against real inventory
+/// (amount &gt; 0 only). See FR-REC-2/3 and docs/05-domain-model.md §6.
+///
+/// Sort order (highest priority first):
+/// 1. Highest completion percentage
+/// 2. Lowest number of missing required ingredients
+/// 3. Most ingredients that are expiring soon
+/// 4. Shortest preparation time
 final class RecipeRanker {
   const RecipeRanker([this._expirationPolicy = const ExpirationPolicy()]);
 
   final ExpirationPolicy _expirationPolicy;
 
-  static const _coverageWeight = 0.70;
-  static const _favoriteTagWeight = 0.15;
-  static const _expiringWeight = 0.15;
-  static const _favoriteTagBonusPerMatch = 0.25;
+  /// Synonym groups so free-text ingredients match common product names.
+  static const List<Set<String>> _aliasGroups = [
+    {'egg', 'eggs'},
+    {'tomato', 'tomatoes', 'passata'},
+    {'pasta', 'spaghetti', 'penne', 'noodles', 'macaroni'},
+    {'milk', 'whole milk', 'semi skimmed milk', 'skimmed milk'},
+    {'olive oil', 'extra virgin olive oil'},
+    {'butter'},
+    {'lettuce', 'salad leaves', 'romaine', 'iceberg'},
+    {'yogurt', 'yoghurt', 'greek yogurt', 'greek yoghurt'},
+    {
+      'berry',
+      'berries',
+      'mixed berries',
+      'strawberry',
+      'strawberries',
+      'blueberry',
+      'blueberries',
+      'raspberry',
+      'raspberries',
+    },
+    {'chicken', 'chicken breast', 'chicken thighs'},
+    {'rice', 'basmati', 'jasmine rice'},
+    {'onion', 'onions'},
+    {'garlic'},
+    {'cheese', 'cheddar', 'mozzarella'},
+    {'parmesan', 'parmigiano', 'parmesan cheese', 'parmigiano reggiano'},
+    {'black pepper', 'pepper', 'ground pepper'},
+    {'guanciale', 'pancetta', 'bacon'},
+    {'bread', 'toast', 'baguette'},
+    {'salt'},
+  ];
 
   /// Ranks [recipes] against [inventory] and [preferences].
   ///
@@ -80,9 +121,6 @@ final class RecipeRanker {
   ///   when that cap is set;
   /// * recipes with zero available required ingredients when [required] is
   ///   non-empty (must share at least one ingredient with real stock).
-  ///
-  /// Remaining recipes are scored in `[0, 1]` and sorted by descending score,
-  /// then ascending title. Partial matches (e.g. 8/10) are included.
   List<RecipeMatch> rank({
     required List<Recipe> recipes,
     required List<AvailableInventoryItem> inventory,
@@ -100,40 +138,98 @@ final class RecipeRanker {
       final maxPrep = preferences.maxPrepTimeMinutes;
       if (maxPrep != null && recipe.prepTimeMinutes > maxPrep) continue;
 
-      final required = recipe.requiredIngredients.toList();
-      final availability = _availability(
-        required: required,
+      final match = _buildMatch(
+        recipe: recipe,
         stock: stock,
+        preferences: preferences,
         today: referenceToday,
-        windowDays: preferences.expiringSoonWindowDays,
       );
+      if (match.requiredCount > 0 && match.availableCount == 0) continue;
+      matches.add(match);
+    }
 
-      if (required.isNotEmpty && availability.availableCount == 0) continue;
+    matches.sort(_compareMatches);
+    return matches;
+  }
 
-      final score = _score(
+  /// Evaluates a single [recipe] without the zero-match hard filter.
+  ///
+  /// Returns `null` when the recipe is deleted or blocked by preferences.
+  /// Useful for recipe detail pages that must still show completion for a
+  /// specific recipe id.
+  RecipeMatch? evaluate({
+    required Recipe recipe,
+    required List<AvailableInventoryItem> inventory,
+    RecipeRankingPreferences preferences = const RecipeRankingPreferences(),
+    DateOnly? today,
+  }) {
+    if (recipe.isDeleted) return null;
+    if (_hasBlockedTag(recipe, preferences.blockedTags)) return null;
+
+    final maxPrep = preferences.maxPrepTimeMinutes;
+    if (maxPrep != null && recipe.prepTimeMinutes > maxPrep) return null;
+
+    return _buildMatch(
+      recipe: recipe,
+      stock: _aggregateStock(inventory),
+      preferences: preferences,
+      today: today ?? DateOnly.fromDateTime(DateTime.now()),
+    );
+  }
+
+  RecipeMatch _buildMatch({
+    required Recipe recipe,
+    required Map<String, _AggregatedStock> stock,
+    required RecipeRankingPreferences preferences,
+    required DateOnly today,
+  }) {
+    final required = recipe.requiredIngredients.toList();
+    final availability = _availability(
+      required: required,
+      stock: stock,
+      today: today,
+      windowDays: preferences.expiringSoonWindowDays,
+    );
+
+    return RecipeMatch(
+      recipe: recipe,
+      score: _score(
         availability: availability,
         recipe: recipe,
         preferences: preferences,
-      );
+      ),
+      missingIngredientNames: availability.missingNames,
+      availableIngredientNames: availability.availableNames,
+      availableCount: availability.availableCount,
+      requiredCount: availability.requiredCount,
+      expiringAvailableCount: availability.expiringAvailableCount,
+    );
+  }
 
-      matches.add(
-        RecipeMatch(
-          recipe: recipe,
-          score: score,
-          missingIngredientNames: availability.missingNames,
-          availableIngredientNames: availability.availableNames,
-          availableCount: availability.availableCount,
-          requiredCount: availability.requiredCount,
-        ),
-      );
-    }
+  /// Whether [ingredient] is covered by [inventory] (amount &gt; 0).
+  bool isIngredientAvailable(
+    RecipeIngredient ingredient,
+    List<AvailableInventoryItem> inventory,
+  ) {
+    return _matchStock(ingredient, _aggregateStock(inventory)) != null;
+  }
 
-    matches.sort((a, b) {
-      final byScore = b.score.compareTo(a.score);
-      if (byScore != 0) return byScore;
-      return a.recipe.title.compareTo(b.recipe.title);
-    });
-    return matches;
+  int _compareMatches(RecipeMatch a, RecipeMatch b) {
+    final byCompletion = b.completionRatio.compareTo(a.completionRatio);
+    if (byCompletion != 0) return byCompletion;
+
+    final byMissing = a.missingCount.compareTo(b.missingCount);
+    if (byMissing != 0) return byMissing;
+
+    final byExpiring = b.expiringAvailableCount.compareTo(
+      a.expiringAvailableCount,
+    );
+    if (byExpiring != 0) return byExpiring;
+
+    final byPrep = a.recipe.prepTimeMinutes.compareTo(b.recipe.prepTimeMinutes);
+    if (byPrep != 0) return byPrep;
+
+    return a.recipe.title.compareTo(b.recipe.title);
   }
 
   bool _hasBlockedTag(Recipe recipe, List<String> blockedTags) {
@@ -202,15 +298,61 @@ final class RecipeRanker {
 
     final needle = _normalizeName(ingredient.name);
     if (needle.isEmpty) return null;
+    final needleKeys = _matchKeys(needle);
     for (final entry in stock.entries) {
       if (entry.value.amount <= 0) continue;
       final name = entry.value.normalizedName;
-      if (name == null) continue;
-      if (name == needle || name.contains(needle) || needle.contains(name)) {
+      if (name == null || name.isEmpty) continue;
+      if (_namesMatch(needleKeys, _matchKeys(name))) {
         return entry.value;
       }
     }
     return null;
+  }
+
+  bool _namesMatch(Set<String> a, Set<String> b) {
+    for (final key in a) {
+      if (b.contains(key)) return true;
+    }
+    // Substring fallback for compound product names ("free range eggs").
+    for (final left in a) {
+      for (final right in b) {
+        if (left.length >= 3 &&
+            right.length >= 3 &&
+            (left.contains(right) || right.contains(left))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Set<String> _matchKeys(String normalized) {
+    final keys = <String>{normalized};
+    if (normalized.endsWith('ies') && normalized.length > 4) {
+      keys.add('${normalized.substring(0, normalized.length - 3)}y');
+    } else if (normalized.endsWith('oes') && normalized.length > 4) {
+      keys.add(normalized.substring(0, normalized.length - 2));
+    } else if (normalized.endsWith('s') &&
+        !normalized.endsWith('ss') &&
+        normalized.length > 3) {
+      keys.add(normalized.substring(0, normalized.length - 1));
+    }
+
+    for (final group in _aliasGroups) {
+      var hits = false;
+      for (final alias in group) {
+        if (keys.contains(alias) ||
+            normalized == alias ||
+            (alias.length >= 4 && normalized.contains(alias)) ||
+            (normalized.length >= 4 && alias.contains(normalized))) {
+          hits = true;
+          break;
+        }
+      }
+      if (hits) keys.addAll(group);
+    }
+    return keys;
   }
 
   String _normalizeName(String value) =>
@@ -224,24 +366,29 @@ final class RecipeRanker {
     final requiredCount = availability.requiredCount;
     if (requiredCount == 0) return 1.0;
 
+    // Score mirrors the primary ranking axes for display/tests.
     final coverage = availability.availableCount / requiredCount;
+    final missingPenalty = availability.missingNames.length / requiredCount;
+    final expiringScore = availability.availableCount == 0
+        ? 0.0
+        : availability.expiringAvailableCount / availability.availableCount;
+    final prepCap = preferences.maxPrepTimeMinutes ?? 120;
+    final prepScore =
+        (prepCap - recipe.prepTimeMinutes).clamp(0, prepCap).toDouble() /
+        prepCap;
 
     final favoriteMatches = recipe.tags
         .where(preferences.favoriteTags.contains)
         .length;
-    final favoriteScore = preferences.favoriteTags.isEmpty
+    final preferenceScore = preferences.favoriteTags.isEmpty
         ? 0.0
-        : (favoriteMatches * _favoriteTagBonusPerMatch)
-              .clamp(0.0, 1.0)
-              .toDouble();
+        : (favoriteMatches * 0.25).clamp(0.0, 1.0).toDouble();
 
-    final expiringScore = availability.availableCount == 0
-        ? 0.0
-        : availability.expiringAvailableCount / availability.availableCount;
-
-    return (_coverageWeight * coverage) +
-        (_favoriteTagWeight * favoriteScore) +
-        (_expiringWeight * expiringScore);
+    return (0.45 * coverage) -
+        (0.20 * missingPenalty) +
+        (0.20 * expiringScore) +
+        (0.10 * prepScore) +
+        (0.05 * preferenceScore);
   }
 
   Map<String, _AggregatedStock> _aggregateStock(

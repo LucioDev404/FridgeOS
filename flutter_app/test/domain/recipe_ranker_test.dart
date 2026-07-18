@@ -46,86 +46,186 @@ void main() {
   }
 
   group('RecipeRanker.rank', () {
-    test('ranks by coverage then title deterministically', () {
-      final pasta = recipe(
+    test('ranks by completion then missing then expiring then prep time', () {
+      final partial = recipe(
         id: 'r1',
-        title: 'Pasta',
+        title: 'Partial',
+        prepTimeMinutes: 10,
         ingredients: [
           ingredient(
             id: 'i1',
             recipeId: 'r1',
-            name: 'Pasta',
-            productId: 'p-pasta',
+            name: 'Eggs',
+            productId: 'p-eggs',
           ),
-          ingredient(id: 'i2', recipeId: 'r1', name: 'Salt'),
+          ingredient(
+            id: 'i2',
+            recipeId: 'r1',
+            name: 'Milk',
+            productId: 'p-milk',
+          ),
         ],
       );
-      final salad = recipe(
+      final completeSlow = recipe(
         id: 'r2',
-        title: 'Salad',
+        title: 'Complete Slow',
+        prepTimeMinutes: 40,
         ingredients: [
           ingredient(
             id: 'i3',
             recipeId: 'r2',
-            name: 'Lettuce',
-            productId: 'p-lettuce',
+            name: 'Eggs',
+            productId: 'p-eggs',
+          ),
+        ],
+      );
+      final completeFast = recipe(
+        id: 'r3',
+        title: 'Complete Fast',
+        prepTimeMinutes: 5,
+        ingredients: [
+          ingredient(
+            id: 'i4',
+            recipeId: 'r3',
+            name: 'Eggs',
+            productId: 'p-eggs',
           ),
         ],
       );
 
       final matches = ranker.rank(
-        recipes: [pasta, salad],
+        recipes: [partial, completeSlow, completeFast],
         inventory: const [
-          AvailableInventoryItem(productId: 'p-pasta', amount: 2),
-          AvailableInventoryItem(productId: 'p-lettuce', amount: 1),
-        ],
-        today: today,
-      );
-
-      expect(matches, hasLength(2));
-      expect(matches.first.recipe.title, 'Salad');
-      expect(matches.first.score, greaterThan(matches.last.score));
-    });
-
-    test('breaks score ties by title ascending', () {
-      final alpha = recipe(
-        id: 'r1',
-        title: 'Alpha Bowl',
-        ingredients: [
-          ingredient(
-            id: 'i1',
-            recipeId: 'r1',
-            name: 'Rice',
-            productId: 'p-rice',
-          ),
-        ],
-      );
-      final beta = recipe(
-        id: 'r2',
-        title: 'Beta Bowl',
-        ingredients: [
-          ingredient(
-            id: 'i2',
-            recipeId: 'r2',
-            name: 'Rice',
-            productId: 'p-rice',
-          ),
-        ],
-      );
-
-      final matches = ranker.rank(
-        recipes: [beta, alpha],
-        inventory: const [
-          AvailableInventoryItem(productId: 'p-rice', amount: 1),
+          AvailableInventoryItem(productId: 'p-eggs', amount: 6),
         ],
         today: today,
       );
 
       expect(matches.map((m) => m.recipe.title).toList(), [
-        'Alpha Bowl',
-        'Beta Bowl',
+        'Complete Fast',
+        'Complete Slow',
+        'Partial',
       ]);
-      expect(matches.first.score, closeTo(matches.last.score, 0.0001));
+      expect(matches.first.completionPercent, 100);
+      expect(matches.last.completionPercent, 50);
+      expect(matches.last.missingIngredientNames, ['Milk']);
+    });
+
+    test('matches unlinked ingredients by product name aliases', () {
+      final carbonara = recipe(
+        id: 'r1',
+        title: 'Spaghetti Carbonara',
+        ingredients: [
+          ingredient(id: 'i1', recipeId: 'r1', name: 'Eggs'),
+          ingredient(id: 'i2', recipeId: 'r1', name: 'Parmesan'),
+          ingredient(id: 'i3', recipeId: 'r1', name: 'Black pepper'),
+          ingredient(id: 'i4', recipeId: 'r1', name: 'Guanciale'),
+        ],
+      );
+
+      final matches = ranker.rank(
+        recipes: [carbonara],
+        inventory: const [
+          AvailableInventoryItem(
+            productId: 'p1',
+            amount: 4,
+            productName: 'Free range eggs',
+          ),
+          AvailableInventoryItem(
+            productId: 'p2',
+            amount: 1,
+            productName: 'Parmigiano Reggiano',
+          ),
+          AvailableInventoryItem(
+            productId: 'p3',
+            amount: 1,
+            productName: 'Ground pepper',
+          ),
+        ],
+        today: today,
+      );
+
+      expect(matches, hasLength(1));
+      expect(matches.single.availableCount, 3);
+      expect(matches.single.requiredCount, 4);
+      expect(matches.single.completionPercent, 75);
+      expect(matches.single.missingIngredientNames, ['Guanciale']);
+      expect(matches.single.availableIngredientNames, [
+        'Eggs',
+        'Parmesan',
+        'Black pepper',
+      ]);
+    });
+
+    test('ignores zero-quantity inventory', () {
+      final toast = recipe(
+        id: 'r1',
+        title: 'Toast',
+        ingredients: [
+          ingredient(
+            id: 'i1',
+            recipeId: 'r1',
+            name: 'Bread',
+            productId: 'p-bread',
+          ),
+        ],
+      );
+
+      final matches = ranker.rank(
+        recipes: [toast],
+        inventory: const [
+          AvailableInventoryItem(productId: 'p-bread', amount: 0),
+        ],
+        today: today,
+      );
+
+      expect(matches, isEmpty);
+    });
+
+    test('breaks equal completion by missing count then expiring stock', () {
+      final withExpiring = recipe(
+        id: 'r1',
+        title: 'Expiring Bowl',
+        ingredients: [
+          ingredient(
+            id: 'i1',
+            recipeId: 'r1',
+            name: 'Milk',
+            productId: 'p-milk-exp',
+          ),
+          ingredient(id: 'i2', recipeId: 'r1', name: 'Salt'),
+        ],
+      );
+      final withoutExpiring = recipe(
+        id: 'r2',
+        title: 'Stable Bowl',
+        ingredients: [
+          ingredient(
+            id: 'i3',
+            recipeId: 'r2',
+            name: 'Milk',
+            productId: 'p-milk',
+          ),
+          ingredient(id: 'i4', recipeId: 'r2', name: 'Pepper'),
+        ],
+      );
+
+      final matches = ranker.rank(
+        recipes: [withoutExpiring, withExpiring],
+        inventory: [
+          AvailableInventoryItem(
+            productId: 'p-milk-exp',
+            amount: 1,
+            expirationDate: DateOnly(2026, 7, 18),
+          ),
+          const AvailableInventoryItem(productId: 'p-milk', amount: 1),
+        ],
+        preferences: const RecipeRankingPreferences(expiringSoonWindowDays: 3),
+        today: today,
+      );
+
+      expect(matches.first.recipe.title, 'Expiring Bowl');
+      expect(matches.first.expiringAvailableCount, 1);
     });
 
     test('excludes recipes with blocked tags', () {
@@ -184,122 +284,30 @@ void main() {
       expect(matches, isEmpty);
     });
 
-    test(
-      'includes partial matches when a linked required ingredient is missing',
-      () {
-        final omelette = recipe(
-          id: 'r1',
-          title: 'Omelette',
-          ingredients: [
-            ingredient(
-              id: 'i1',
-              recipeId: 'r1',
-              name: 'Eggs',
-              productId: 'p-eggs',
-            ),
-            ingredient(
-              id: 'i2',
-              recipeId: 'r1',
-              name: 'Milk',
-              productId: 'p-milk',
-            ),
-          ],
-        );
-
-        final matches = ranker.rank(
-          recipes: [omelette],
-          inventory: const [
-            AvailableInventoryItem(productId: 'p-eggs', amount: 6),
-          ],
-          today: today,
-        );
-
-        expect(matches, hasLength(1));
-        expect(matches.single.availableCount, 1);
-        expect(matches.single.requiredCount, 2);
-        expect(matches.single.missingIngredientNames, ['Milk']);
-      },
-    );
-
-    test(
-      'includes partial matches when only unlinked ingredients are missing',
-      () {
-        final soup = recipe(
-          id: 'r1',
-          title: 'Soup',
-          ingredients: [
-            ingredient(
-              id: 'i1',
-              recipeId: 'r1',
-              name: 'Carrots',
-              productId: 'p-carrot',
-            ),
-            ingredient(id: 'i2', recipeId: 'r1', name: 'Salt'),
-          ],
-        );
-
-        final matches = ranker.rank(
-          recipes: [soup],
-          inventory: const [
-            AvailableInventoryItem(productId: 'p-carrot', amount: 3),
-          ],
-          today: today,
-        );
-
-        expect(matches, hasLength(1));
-        expect(matches.single.availableCount, 1);
-        expect(matches.single.requiredCount, 2);
-        expect(matches.single.missingIngredientNames, ['Salt']);
-      },
-    );
-
-    test('boosts score for favorite tags and expiring stock', () {
-      final expiringSoon = DateOnly(2026, 7, 18);
-      final plain = recipe(
+    test('evaluate returns zero-match recipes for detail views', () {
+      final soup = recipe(
         id: 'r1',
-        title: 'Plain Rice',
+        title: 'Soup',
         ingredients: [
           ingredient(
             id: 'i1',
             recipeId: 'r1',
-            name: 'Rice',
-            productId: 'p-rice',
-          ),
-        ],
-      );
-      final favorite = recipe(
-        id: 'r2',
-        title: 'Favorite Rice',
-        tags: const <String>['quick'],
-        ingredients: [
-          ingredient(
-            id: 'i2',
-            recipeId: 'r2',
-            name: 'Rice',
-            productId: 'p-rice-exp',
+            name: 'Carrots',
+            productId: 'p-carrot',
           ),
         ],
       );
 
-      final matches = ranker.rank(
-        recipes: [plain, favorite],
-        inventory: [
-          const AvailableInventoryItem(productId: 'p-rice', amount: 1),
-          AvailableInventoryItem(
-            productId: 'p-rice-exp',
-            amount: 1,
-            expirationDate: expiringSoon,
-          ),
-        ],
-        preferences: const RecipeRankingPreferences(
-          favoriteTags: <String>['quick'],
-          expiringSoonWindowDays: 3,
-        ),
+      final match = ranker.evaluate(
+        recipe: soup,
+        inventory: const [],
         today: today,
       );
 
-      expect(matches.first.recipe.title, 'Favorite Rice');
-      expect(matches.first.score, greaterThan(matches.last.score));
+      expect(match, isNotNull);
+      expect(match!.availableCount, 0);
+      expect(match.completionPercent, 0);
+      expect(match.missingIngredientNames, ['Carrots']);
     });
 
     test('ignores optional ingredients for hard filters and coverage', () {
@@ -334,7 +342,7 @@ void main() {
       expect(matches, hasLength(1));
       expect(matches.single.availableCount, 1);
       expect(matches.single.requiredCount, 1);
-      expect(matches.single.score, closeTo(0.7, 0.001));
+      expect(matches.single.completionPercent, 100);
     });
   });
 }

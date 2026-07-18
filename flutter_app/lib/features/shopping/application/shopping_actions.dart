@@ -8,6 +8,7 @@ import 'package:fridgeos/domain/entities/product.dart';
 import 'package:fridgeos/domain/entities/shopping_list_item.dart';
 import 'package:fridgeos/domain/repositories/shopping_repository.dart';
 import 'package:fridgeos/domain/services/shopping_list_policy.dart';
+import 'package:fridgeos/domain/services/shopping_list_qr_codec.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 import 'package:fridgeos/domain/value_objects/quantity.dart';
 
@@ -137,6 +138,21 @@ final class ShoppingActions {
       );
       final upsert = await shopping.upsert(item);
       if (upsert.isFailure) return Result.failure(upsert.failureOrNull!);
+      added++;
+    }
+    return Result.success(added);
+  }
+
+  /// Imports validated QR shopping lines as manual pending items.
+  Future<Result<int>> importFromQr(ShoppingListQrPayload payload) async {
+    var added = 0;
+    for (final line in payload.items) {
+      final result = await addManual(
+        name: line.name,
+        amount: line.quantity,
+        unit: line.quantity == null ? null : MeasurementUnit.pieces,
+      );
+      if (result.isFailure) return Result.failure(result.failureOrNull!);
       added++;
     }
     return Result.success(added);

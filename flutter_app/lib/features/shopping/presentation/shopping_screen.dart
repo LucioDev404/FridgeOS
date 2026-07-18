@@ -11,6 +11,7 @@ import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback
 import 'package:fridgeos/features/shopping/application/shopping_actions.dart';
 import 'package:fridgeos/features/shopping/application/shopping_providers.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 
 /// Shopping list (manual + auto-generated).
 class ShoppingScreen extends ConsumerStatefulWidget {
@@ -91,13 +92,26 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: _syncProposals,
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.shoppingRefreshProposals),
-            ),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _syncProposals,
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.shoppingRefreshProposals),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/shopping/qr-export'),
+                icon: const Icon(Icons.qr_code_2_outlined),
+                label: Text(l10n.shoppingQrShare),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/shopping/qr-import'),
+                icon: const Icon(Icons.qr_code_scanner_outlined),
+                label: Text(l10n.shoppingQrImport),
+              ),
+            ],
           ),
         ),
         const Divider(height: AppSpacing.lg),
