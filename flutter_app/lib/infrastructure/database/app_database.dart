@@ -6,7 +6,7 @@ part 'app_database.g.dart';
 
 /// Current on-disk schema version. Bump on every schema change and add a
 /// migration step + migration test (docs/06-database-design.md §5).
-const int kSchemaVersion = 1;
+const int kSchemaVersion = 2;
 
 /// Fixed identifiers for the seeded default locations. Using stable ids keeps
 /// seeding idempotent and merge-safe for a future sync engine.
@@ -44,6 +44,19 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (m) async {
       await m.createAll();
       await _seed();
+    },
+    onUpgrade: (m, from, to) async {
+      // Never drop tables or recreate the database — preserve user data.
+      if (from < 2) {
+        await m.addColumn(recipes, recipes.servings);
+        await m.addColumn(recipes, recipes.difficulty);
+      }
+      await into(appMeta).insertOnConflictUpdate(
+        AppMetaCompanion.insert(
+          key: 'schema_version',
+          value: '$kSchemaVersion',
+        ),
+      );
     },
     beforeOpen: (details) async {
       // Enforce referential integrity (docs/06-database-design.md §4).

@@ -11,4 +11,7 @@ abstract interface class LocationRepository {
 
   /// Inserts or updates [location].
   Future<Result<void>> upsert(Location location);
+
+  /// Soft-deletes the location with [id] by setting [deletedAt].
+  Future<Result<void>> softDelete(String id, DateTime deletedAt);
 }

@@ -7,6 +7,7 @@ import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback
 import 'package:fridgeos/features/recipes/application/recipe_actions.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 
 /// Recipe suggestions ranked by availability, expiration and preferences.
 class RecipesScreen extends ConsumerWidget {
@@ -111,6 +112,11 @@ class _RecipeCard extends StatelessWidget {
             Wrap(
               spacing: AppSpacing.sm,
               children: [
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/recipes/${recipe.id}'),
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: Text(l10n.recipeViewDetails),
+                ),
                 if (match.missingIngredientNames.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () => runWithFeedback(

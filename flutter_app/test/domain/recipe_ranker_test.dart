@@ -185,7 +185,7 @@ void main() {
     });
 
     test(
-      'excludes when a linked required ingredient is missing from stock',
+      'includes partial matches when a linked required ingredient is missing',
       () {
         final omelette = recipe(
           id: 'r1',
@@ -214,7 +214,10 @@ void main() {
           today: today,
         );
 
-        expect(matches, isEmpty);
+        expect(matches, hasLength(1));
+        expect(matches.single.availableCount, 1);
+        expect(matches.single.requiredCount, 2);
+        expect(matches.single.missingIngredientNames, ['Milk']);
       },
     );
 

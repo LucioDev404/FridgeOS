@@ -118,6 +118,8 @@ class HistoryScreen extends ConsumerWidget {
     InventoryEventType.addProduct => Icons.add_circle_outline,
     InventoryEventType.removeProduct => Icons.remove_circle_outline,
     InventoryEventType.updateQuantity => Icons.tune,
+    InventoryEventType.restock => Icons.add_box_outlined,
+    InventoryEventType.manualCorrection => Icons.edit_outlined,
     InventoryEventType.changeLocation => Icons.swap_horiz,
     InventoryEventType.consume => Icons.restaurant_outlined,
     InventoryEventType.discard => Icons.delete_outline,

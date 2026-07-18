@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
+import 'package:fridgeos/core/error/failure.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/result.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
@@ -9,9 +10,10 @@ import 'package:fridgeos/domain/value_objects/enums.dart';
 import 'package:fridgeos/features/inventory/application/inventory_providers.dart';
 import 'package:fridgeos/features/locations/application/location_actions.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 
-/// Full-screen locations management (add / edit). Reached from the inventory
-/// filter bar and settings.
+/// Full-screen locations management (add / edit / delete). Reached from the
+/// inventory filter bar and settings.
 class LocationsScreen extends ConsumerWidget {
   const LocationsScreen({super.key});
 
@@ -21,7 +23,18 @@ class LocationsScreen extends ConsumerWidget {
     final locations = ref.watch(locationsProvider).value ?? const [];
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.locationsTitle)),
+      appBar: AppBar(
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/inventory');
+            }
+          },
+        ),
+        title: Text(l10n.locationsTitle),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context, ref, null),
         icon: const Icon(Icons.add),
@@ -43,10 +56,21 @@ class LocationsScreen extends ConsumerWidget {
                     leading: Icon(_iconFor(location.type)),
                     title: Text(location.name),
                     subtitle: Text(location.type.label(l10n)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      tooltip: l10n.editLocation,
-                      onPressed: () => _openEditor(context, ref, location),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: l10n.editLocation,
+                          onPressed: () => _openEditor(context, ref, location),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: l10n.deleteLocation,
+                          onPressed: () =>
+                              _confirmDelete(context, ref, location),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -60,6 +84,50 @@ class LocationsScreen extends ConsumerWidget {
     LocationType.freezer => Icons.ac_unit,
     LocationType.pantry => Icons.shelves,
   };
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Location location,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteLocationConfirmTitle),
+        content: Text(l10n.deleteLocationConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final result = await ref
+        .read(locationActionsProvider)
+        .delete(location: location);
+    if (!context.mounted) return;
+
+    if (result.isFailure) {
+      final failure = result.failureOrNull;
+      final message =
+          failure is ValidationFailure &&
+              failure.message == 'LOCATION_HAS_PRODUCTS'
+          ? l10n.locationHasProducts
+          : l10n.actionFailed;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+  }
 
   Future<void> _openEditor(
     BuildContext context,

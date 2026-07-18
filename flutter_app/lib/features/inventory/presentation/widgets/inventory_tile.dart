@@ -7,12 +7,13 @@ import 'package:fridgeos/features/inventory/application/inventory_actions.dart';
 import 'package:fridgeos/features/inventory/application/inventory_line_item.dart';
 import 'package:fridgeos/features/inventory/application/inventory_providers.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
+import 'package:fridgeos/features/inventory/presentation/widgets/edit_product_sheet.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/expiration_badge.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/move_location_dialog.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/set_quantity_dialog.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 
-enum _ItemMenuAction { move, markUsed, throwAway, remove }
+enum _ItemMenuAction { edit, move, markUsed, throwAway, remove }
 
 /// A single inventory row: product identity, location, expiration/low-stock
 /// badges, an inline quantity stepper and an overflow menu of item actions.
@@ -75,6 +76,10 @@ class InventoryTile extends ConsumerWidget {
               onSelected: (action) => _onMenu(context, ref, action),
               itemBuilder: (context) => [
                 PopupMenuItem(
+                  value: _ItemMenuAction.edit,
+                  child: Text(l10n.editProduct),
+                ),
+                PopupMenuItem(
                   value: _ItemMenuAction.move,
                   child: Text(l10n.moveTo),
                 ),
@@ -111,6 +116,8 @@ class InventoryTile extends ConsumerWidget {
   ) async {
     final actions = ref.read(inventoryActionsProvider);
     switch (action) {
+      case _ItemMenuAction.edit:
+        await showEditProductSheet(context, line: line);
       case _ItemMenuAction.move:
         final target = await showMoveLocationDialog(
           context,

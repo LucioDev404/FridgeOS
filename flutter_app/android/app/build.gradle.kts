@@ -6,13 +6,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing is loaded from android/key.properties when present. That file
-// is git-ignored and holds no secrets in the repository (docs/09-security-design.md
-// §10). When absent (e.g. local dev / CI without secrets), the build falls back
-// to debug signing so `flutter run --release` still works.
+// Release signing preference order:
+// 1. android/key.properties (local / production secrets, git-ignored)
+// 2. committed CI keystore android/app/fridgeos-ci.jks (stable update signing)
+// 3. debug keystore (last resort for local `flutter run --release`)
+//
+// Root cause of "must uninstall to install APK": CI previously fell back to the
+// machine-local debug keystore, so each runner produced a different signature.
+// Android rejects updates when the signing certificate changes.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
+val ciKeystoreFile = file("fridgeos-ci.jks")
 val hasReleaseSigning = keystorePropertiesFile.exists()
+val hasCiSigning = !hasReleaseSigning && ciKeystoreFile.exists()
 if (hasReleaseSigning) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
@@ -48,12 +54,19 @@ android {
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
             }
+        } else if (hasCiSigning) {
+            create("release") {
+                keyAlias = "fridgeos"
+                keyPassword = "fridgeos-ci-store"
+                storeFile = ciKeystoreFile
+                storePassword = "fridgeos-ci-store"
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseSigning) {
+            signingConfig = if (hasReleaseSigning || hasCiSigning) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

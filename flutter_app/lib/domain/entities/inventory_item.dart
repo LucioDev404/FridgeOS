@@ -48,8 +48,11 @@ final class InventoryItem {
     String? locationId,
     Quantity? quantity,
     DateOnly? expirationDate,
+    bool clearExpirationDate = false,
     double? lowStockThreshold,
+    bool clearLowStockThreshold = false,
     String? note,
+    bool clearNote = false,
     DateTime? updatedAt,
     DateTime? deletedAt,
   }) {
@@ -58,9 +61,13 @@ final class InventoryItem {
       productId: productId,
       locationId: locationId ?? this.locationId,
       quantity: quantity ?? this.quantity,
-      expirationDate: expirationDate ?? this.expirationDate,
-      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
-      note: note ?? this.note,
+      expirationDate: clearExpirationDate
+          ? null
+          : (expirationDate ?? this.expirationDate),
+      lowStockThreshold: clearLowStockThreshold
+          ? null
+          : (lowStockThreshold ?? this.lowStockThreshold),
+      note: clearNote ? null : (note ?? this.note),
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,

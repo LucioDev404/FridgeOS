@@ -28,7 +28,7 @@ void main() {
     expect(schemaVersion.value, '$kSchemaVersion');
   });
 
-  test('creates the full normalized schema (v1)', () async {
+  test('creates the full normalized schema (v2)', () async {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
 
@@ -46,6 +46,10 @@ void main() {
       'user_preferences',
       'app_meta',
     });
+
+    final columns = await db.customSelect('PRAGMA table_info(recipes)').get();
+    final names = columns.map((r) => r.read<String>('name')).toSet();
+    expect(names, containsAll(<String>['servings', 'difficulty']));
   });
 
   test('enforces foreign keys at runtime', () async {

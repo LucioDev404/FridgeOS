@@ -21,6 +21,7 @@ flutter_app/android/**/gradle-wrapper.jar
 flutter_app/android/key.properties
 **/*.keystore
 **/*.jks
+!flutter_app/android/app/fridgeos-ci.jks
 
 # Secrets / signing — NEVER commit
 *.env

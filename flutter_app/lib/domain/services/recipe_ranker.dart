@@ -25,11 +25,15 @@ final class AvailableInventoryItem {
   const AvailableInventoryItem({
     required this.productId,
     required this.amount,
+    this.productName,
     this.expirationDate,
   });
 
   final String productId;
   final double amount;
+
+  /// Optional display name used to match unlinked recipe ingredients.
+  final String? productName;
   final DateOnly? expirationDate;
 }
 
@@ -39,6 +43,7 @@ final class RecipeMatch {
     required this.recipe,
     required this.score,
     required this.missingIngredientNames,
+    required this.availableIngredientNames,
     required this.availableCount,
     required this.requiredCount,
   });
@@ -46,8 +51,13 @@ final class RecipeMatch {
   final Recipe recipe;
   final double score;
   final List<String> missingIngredientNames;
+  final List<String> availableIngredientNames;
   final int availableCount;
   final int requiredCount;
+
+  /// Completion ratio in `[0, 1]` (`availableCount / requiredCount`).
+  double get completionRatio =>
+      requiredCount == 0 ? 1.0 : availableCount / requiredCount;
 }
 
 /// Pure service that ranks recipes by stock coverage, preferences, and expiration
@@ -68,11 +78,11 @@ final class RecipeRanker {
   /// * any [RecipeRankingPreferences.blockedTags] present on the recipe;
   /// * [Recipe.prepTimeMinutes] above [RecipeRankingPreferences.maxPrepTimeMinutes]
   ///   when that cap is set;
-  /// * any required ingredient with a [RecipeIngredient.productId] that is
-  ///   completely absent from stock (zero or missing).
+  /// * recipes with zero available required ingredients when [required] is
+  ///   non-empty (must share at least one ingredient with real stock).
   ///
   /// Remaining recipes are scored in `[0, 1]` and sorted by descending score,
-  /// then ascending title.
+  /// then ascending title. Partial matches (e.g. 8/10) are included.
   List<RecipeMatch> rank({
     required List<Recipe> recipes,
     required List<AvailableInventoryItem> inventory,
@@ -91,14 +101,15 @@ final class RecipeRanker {
       if (maxPrep != null && recipe.prepTimeMinutes > maxPrep) continue;
 
       final required = recipe.requiredIngredients.toList();
-      if (_hasMissingLinkedIngredient(required, stock)) continue;
-
       final availability = _availability(
         required: required,
         stock: stock,
         today: referenceToday,
         windowDays: preferences.expiringSoonWindowDays,
       );
+
+      if (required.isNotEmpty && availability.availableCount == 0) continue;
+
       final score = _score(
         availability: availability,
         recipe: recipe,
@@ -110,6 +121,7 @@ final class RecipeRanker {
           recipe: recipe,
           score: score,
           missingIngredientNames: availability.missingNames,
+          availableIngredientNames: availability.availableNames,
           availableCount: availability.availableCount,
           requiredCount: availability.requiredCount,
         ),
@@ -130,19 +142,6 @@ final class RecipeRanker {
     return recipe.tags.any(blocked.contains);
   }
 
-  bool _hasMissingLinkedIngredient(
-    List<RecipeIngredient> required,
-    Map<String, _AggregatedStock> stock,
-  ) {
-    for (final ingredient in required) {
-      final productId = ingredient.productId;
-      if (productId == null) continue;
-      final amount = stock[productId]?.amount ?? 0;
-      if (amount <= 0) return true;
-    }
-    return false;
-  }
-
   _IngredientAvailability _availability({
     required List<RecipeIngredient> required,
     required Map<String, _AggregatedStock> stock,
@@ -154,6 +153,7 @@ final class RecipeRanker {
         availableCount: 0,
         requiredCount: 0,
         missingNames: <String>[],
+        availableNames: <String>[],
         expiringAvailableCount: 0,
       );
     }
@@ -161,18 +161,15 @@ final class RecipeRanker {
     var availableCount = 0;
     var expiringAvailableCount = 0;
     final missingNames = <String>[];
+    final availableNames = <String>[];
 
     for (final ingredient in required) {
-      final productId = ingredient.productId;
-      final isAvailable = productId != null
-          ? (stock[productId]?.amount ?? 0) > 0
-          : false;
-
-      if (isAvailable) {
+      final matched = _matchStock(ingredient, stock);
+      if (matched != null) {
         availableCount++;
-        final aggregated = stock[productId]!;
+        availableNames.add(ingredient.name);
         final status = _expirationPolicy.classify(
-          expirationDate: aggregated.earliestExpiration,
+          expirationDate: matched.earliestExpiration,
           today: today,
           windowDays: windowDays,
         );
@@ -188,9 +185,36 @@ final class RecipeRanker {
       availableCount: availableCount,
       requiredCount: required.length,
       missingNames: missingNames,
+      availableNames: availableNames,
       expiringAvailableCount: expiringAvailableCount,
     );
   }
+
+  _AggregatedStock? _matchStock(
+    RecipeIngredient ingredient,
+    Map<String, _AggregatedStock> stock,
+  ) {
+    final productId = ingredient.productId;
+    if (productId != null) {
+      final byId = stock[productId];
+      if (byId != null && byId.amount > 0) return byId;
+    }
+
+    final needle = _normalizeName(ingredient.name);
+    if (needle.isEmpty) return null;
+    for (final entry in stock.entries) {
+      if (entry.value.amount <= 0) continue;
+      final name = entry.value.normalizedName;
+      if (name == null) continue;
+      if (name == needle || name.contains(needle) || needle.contains(name)) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+  String _normalizeName(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   double _score({
     required _IngredientAvailability availability,
@@ -231,6 +255,9 @@ final class RecipeRanker {
         stock[item.productId] = _AggregatedStock(
           amount: item.amount,
           earliestExpiration: item.expirationDate,
+          normalizedName: item.productName == null
+              ? null
+              : _normalizeName(item.productName!),
         );
         continue;
       }
@@ -241,10 +268,15 @@ final class RecipeRanker {
 }
 
 final class _AggregatedStock {
-  const _AggregatedStock({required this.amount, this.earliestExpiration});
+  const _AggregatedStock({
+    required this.amount,
+    this.earliestExpiration,
+    this.normalizedName,
+  });
 
   final double amount;
   final DateOnly? earliestExpiration;
+  final String? normalizedName;
 
   _AggregatedStock merge(AvailableInventoryItem item) {
     DateOnly? earliest = earliestExpiration;
@@ -256,6 +288,7 @@ final class _AggregatedStock {
     return _AggregatedStock(
       amount: amount + item.amount,
       earliestExpiration: earliest,
+      normalizedName: normalizedName,
     );
   }
 }
@@ -265,11 +298,13 @@ final class _IngredientAvailability {
     required this.availableCount,
     required this.requiredCount,
     required this.missingNames,
+    required this.availableNames,
     required this.expiringAvailableCount,
   });
 
   final int availableCount;
   final int requiredCount;
   final List<String> missingNames;
+  final List<String> availableNames;
   final int expiringAvailableCount;
 }

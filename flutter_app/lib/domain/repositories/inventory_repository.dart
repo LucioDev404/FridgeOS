@@ -21,6 +21,11 @@ abstract interface class InventoryRepository {
   /// Atomically persists [mutation]'s item state and its event.
   Future<Result<void>> applyMutation(InventoryMutation mutation);
 
+  /// Updates the current item snapshot without appending an inventory event.
+  /// Used for metadata edits (expiration, notes, low-stock) that must not
+  /// rewrite history.
+  Future<Result<void>> updateItemSnapshot(InventoryItem item);
+
   /// Emits the immutable event log, optionally filtered by [productId], most
   /// recent first.
   Stream<List<InventoryEvent>> watchEvents({String? productId});

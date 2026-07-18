@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fridgeos/core/error/failure.dart';
 import 'package:fridgeos/core/result.dart';
 import 'package:fridgeos/domain/entities/inventory_event.dart';
 import 'package:fridgeos/domain/entities/inventory_item.dart';
@@ -93,6 +94,20 @@ final class FakeLocationRepository implements LocationRepository {
     _changes.add(null);
     return const Result.success(null);
   }
+
+  @override
+  Future<Result<void>> softDelete(String id, DateTime deletedAt) async {
+    final existing = _locations[id];
+    if (existing == null) {
+      return const Result.failure(NotFoundFailure('Location not found'));
+    }
+    _locations[id] = existing.copyWith(
+      deletedAt: deletedAt,
+      updatedAt: deletedAt,
+    );
+    _changes.add(null);
+    return const Result.success(null);
+  }
 }
 
 final class FakeInventoryRepository implements InventoryRepository {
@@ -125,6 +140,13 @@ final class FakeInventoryRepository implements InventoryRepository {
   Future<Result<void>> applyMutation(InventoryMutation mutation) async {
     _items[mutation.item.id] = mutation.item;
     _events.add(mutation.event);
+    _changes.add(null);
+    return const Result.success(null);
+  }
+
+  @override
+  Future<Result<void>> updateItemSnapshot(InventoryItem item) async {
+    _items[item.id] = item;
     _changes.add(null);
     return const Result.success(null);
   }

@@ -4,6 +4,7 @@ import 'package:fridgeos/data/mappers/mappers.dart';
 import 'package:fridgeos/data/providers.dart';
 import 'package:fridgeos/domain/entities/product.dart';
 import 'package:fridgeos/domain/entities/recipe.dart';
+import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 import 'package:fridgeos/domain/value_objects/quantity.dart';
@@ -66,13 +67,22 @@ void main() {
     return productId;
   }
 
-  test('listRanked returns seeded builtin recipes', () async {
+  test('listRanked returns seeded builtin recipes matching stock', () async {
+    await addProductAndStock(name: 'Eggs', productId: 'p-eggs', amount: 6);
+    await addProductAndStock(name: 'Butter', productId: 'p-butter', amount: 1);
+
     final items = await db.select(db.inventoryItems).get();
     final result = await recipeActions.listRanked(
       items: items.map(inventoryItemFromRow).toList(),
     );
     expect(result.isSuccess, isTrue);
     expect(result.valueOrNull, isNotEmpty);
+    expect(
+      result.valueOrNull!.any(
+        (m) => m.recipe.id == 'seed-recipe-scrambled-eggs',
+      ),
+      isTrue,
+    );
   });
 
   test('addMissingToShopping creates pending manual items', () async {
@@ -91,9 +101,13 @@ void main() {
     );
     await container.read(recipeRepositoryProvider).upsert(recipe);
 
-    final ranked = await recipeActions.listRanked(items: const []);
-    final match = ranked.valueOrNull!.firstWhere(
-      (m) => m.recipe.id == 'r-test',
+    final match = RecipeMatch(
+      recipe: recipe,
+      score: 0,
+      missingIngredientNames: const ['Carrots'],
+      availableIngredientNames: const [],
+      availableCount: 0,
+      requiredCount: 1,
     );
 
     final add = await recipeActions.addMissingToShopping(match);

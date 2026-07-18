@@ -219,6 +219,10 @@ Recipe recipeFromRow(RecipeRow row, List<RecipeIngredient> ingredients) =>
       tags: _decodeStringList(row.tagsJson),
       source: RecipeSource.fromWire(row.source),
       ingredients: ingredients,
+      servings: row.servings,
+      difficulty: row.difficulty == null
+          ? null
+          : RecipeDifficulty.fromWire(row.difficulty!),
       createdAt: _dateTimeFromMs(row.createdAt),
       updatedAt: _dateTimeFromMs(row.updatedAt),
       deletedAt: row.deletedAt == null ? null : _dateTimeFromMs(row.deletedAt!),
@@ -246,6 +250,8 @@ RecipesCompanion recipeToCompanion(Recipe recipe) => RecipesCompanion(
   stepsJson: Value(_encodeStringList(recipe.steps)),
   tagsJson: Value(_encodeStringList(recipe.tags)),
   source: Value(recipe.source.wire),
+  servings: Value(recipe.servings),
+  difficulty: Value(recipe.difficulty?.wire),
   createdAt: Value(_msFromDateTime(recipe.createdAt)),
   updatedAt: Value(_msFromDateTime(recipe.updatedAt)),
   deletedAt: Value(

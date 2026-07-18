@@ -98,6 +98,12 @@ class Recipes extends Table {
   TextColumn get stepsJson => text()();
   TextColumn get tagsJson => text().withDefault(const Constant('[]'))();
   TextColumn get source => text()();
+
+  /// Optional servings count (added in schema v2).
+  IntColumn get servings => integer().nullable()();
+
+  /// Optional difficulty wire value (added in schema v2).
+  TextColumn get difficulty => text().nullable()();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   IntColumn get deletedAt => integer().nullable()();

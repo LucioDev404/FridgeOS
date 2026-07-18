@@ -65,6 +65,20 @@ final class DriftInventoryRepository implements InventoryRepository {
   }
 
   @override
+  Future<Result<void>> updateItemSnapshot(InventoryItem item) async {
+    try {
+      await _db
+          .into(_db.inventoryItems)
+          .insertOnConflictUpdate(inventoryItemToCompanion(item));
+      return const Result.success(null);
+    } on Object catch (e) {
+      return Result.failure(
+        PersistenceFailure('updateItemSnapshot failed: $e'),
+      );
+    }
+  }
+
+  @override
   Stream<List<InventoryEvent>> watchEvents({String? productId}) {
     final query = _db.select(_db.inventoryEvents)
       ..orderBy([

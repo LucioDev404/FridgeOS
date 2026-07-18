@@ -36,6 +36,11 @@ jobs:
       - name: Generate sources
         run: bash ../scripts/gen.sh
 
+      - name: Verify CI signing keystore
+        run: |
+          test -f android/app/fridgeos-ci.jks
+          echo "Using committed fridgeos-ci.jks for release signing (stable updates)."
+
       - name: Build APK (release)
         run: flutter build apk --release
 

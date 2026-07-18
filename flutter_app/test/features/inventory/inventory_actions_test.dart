@@ -70,27 +70,100 @@ void main() {
     expect(result.isFailure, isTrue);
   });
 
+  test('addManualItem stores optional barcode and low stock', () async {
+    final result = await actions.addManualItem(
+      name: 'Yogurt',
+      category: FoodCategory.dairy,
+      unit: MeasurementUnit.pieces,
+      amount: 4,
+      locationId: kDefaultFridgeId,
+      barcode: '4006381333931',
+      lowStockThreshold: 1,
+      expirationDate: DateOnly(2026, 8, 1),
+    );
+    expect(result.isSuccess, isTrue, reason: result.failureOrNull?.message);
+
+    final product = (await db.select(db.products).get()).single;
+    expect(product.barcode, '4006381333931');
+    final item = (await db.select(db.inventoryItems).get()).single;
+    expect(item.lowStockThreshold, 1);
+    expect(item.expirationDate, '2026-08-01');
+  });
+
+  test('adjust increments quantity and logs a RESTOCK event', () async {
+    await addMilk();
+    final item = (await db.select(db.inventoryItems).get()).single;
+
+    final result = await actions.adjust(
+      item: inventoryItemFromRow(item),
+      delta: 1,
+    );
+    expect(result.isSuccess, isTrue);
+
+    final updated = (await db.select(db.inventoryItems).get()).single;
+    expect(updated.quantityAmount, 3);
+    final events = await db.select(db.inventoryEvents).get();
+    expect(
+      events.map((e) => e.type),
+      contains(InventoryEventType.restock.wire),
+    );
+  });
+
   test(
-    'adjust increments quantity and logs an UPDATE_QUANTITY event',
+    'setQuantity records MANUAL_CORRECTION and keeps prior events',
     () async {
-      await addMilk();
+      await addMilk(amount: 2);
       final item = (await db.select(db.inventoryItems).get()).single;
 
-      final result = await actions.adjust(
+      final result = await actions.setQuantity(
         item: inventoryItemFromRow(item),
-        delta: 1,
+        targetAmount: 5,
       );
       expect(result.isSuccess, isTrue);
 
-      final updated = (await db.select(db.inventoryItems).get()).single;
-      expect(updated.quantityAmount, 3);
       final events = await db.select(db.inventoryEvents).get();
+      expect(events, hasLength(2));
       expect(
         events.map((e) => e.type),
-        contains(InventoryEventType.updateQuantity.wire),
+        containsAll([
+          InventoryEventType.addProduct.wire,
+          InventoryEventType.manualCorrection.wire,
+        ]),
       );
     },
   );
+
+  test('updateItemDetails edits snapshot without deleting history', () async {
+    await addMilk(amount: 2);
+    final productRow = (await db.select(db.products).get()).single;
+    final itemRow = (await db.select(db.inventoryItems).get()).single;
+
+    final result = await actions.updateItemDetails(
+      product: productFromRow(productRow),
+      item: inventoryItemFromRow(itemRow),
+      name: 'Whole milk',
+      category: FoodCategory.dairy,
+      unit: MeasurementUnit.liters,
+      amount: 2,
+      locationId: kDefaultFridgeId,
+      barcode: '4006381333931',
+      expirationDate: DateOnly(2026, 9, 1),
+      lowStockThreshold: 0.5,
+      note: 'Prefer organic',
+    );
+    expect(result.isSuccess, isTrue, reason: result.failureOrNull?.message);
+
+    final product = (await db.select(db.products).get()).single;
+    expect(product.name, 'Whole milk');
+    expect(product.barcode, '4006381333931');
+    final item = (await db.select(db.inventoryItems).get()).single;
+    expect(item.expirationDate, '2026-09-01');
+    expect(item.lowStockThreshold, 0.5);
+    expect(item.note, 'Prefer organic');
+    final events = await db.select(db.inventoryEvents).get();
+    expect(events, hasLength(1));
+    expect(events.single.type, InventoryEventType.addProduct.wire);
+  });
 
   test('consuming all soft-deletes the item and keeps its history', () async {
     await addMilk(amount: 1);

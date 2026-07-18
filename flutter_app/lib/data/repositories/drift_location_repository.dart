@@ -44,4 +44,21 @@ final class DriftLocationRepository implements LocationRepository {
       return Result.failure(PersistenceFailure('upsert failed: $e'));
     }
   }
+
+  @override
+  Future<Result<void>> softDelete(String id, DateTime deletedAt) async {
+    try {
+      final existing = await findById(id);
+      if (existing.isFailure) return Result.failure(existing.failureOrNull!);
+      final location = existing.valueOrNull;
+      if (location == null) {
+        return const Result.failure(NotFoundFailure('Location not found'));
+      }
+      return upsert(
+        location.copyWith(deletedAt: deletedAt, updatedAt: deletedAt),
+      );
+    } on Object catch (e) {
+      return Result.failure(PersistenceFailure('softDelete failed: $e'));
+    }
+  }
 }

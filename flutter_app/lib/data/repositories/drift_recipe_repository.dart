@@ -115,6 +115,8 @@ final class DriftRecipeRepository implements RecipeRepository {
       required List<String> steps,
       required List<String> tags,
       required List<RecipeIngredient> ingredients,
+      int? servings,
+      RecipeDifficulty? difficulty,
     }) {
       return Recipe(
         id: id,
@@ -124,6 +126,8 @@ final class DriftRecipeRepository implements RecipeRepository {
         tags: tags,
         source: RecipeSource.builtin,
         ingredients: ingredients,
+        servings: servings,
+        difficulty: difficulty,
         createdAt: now,
         updatedAt: now,
       );
@@ -134,6 +138,8 @@ final class DriftRecipeRepository implements RecipeRepository {
         id: 'seed-recipe-scrambled-eggs',
         title: 'Scrambled eggs',
         prepTimeMinutes: 10,
+        servings: 2,
+        difficulty: RecipeDifficulty.easy,
         tags: const ['breakfast', 'quick'],
         steps: const [
           'Beat eggs with a pinch of salt.',
@@ -165,6 +171,8 @@ final class DriftRecipeRepository implements RecipeRepository {
         id: 'seed-recipe-pasta',
         title: 'Tomato pasta',
         prepTimeMinutes: 25,
+        servings: 2,
+        difficulty: RecipeDifficulty.easy,
         tags: const ['dinner', 'italian'],
         steps: const [
           'Boil pasta until al dente.',
@@ -196,6 +204,8 @@ final class DriftRecipeRepository implements RecipeRepository {
         id: 'seed-recipe-salad',
         title: 'Garden salad',
         prepTimeMinutes: 15,
+        servings: 2,
+        difficulty: RecipeDifficulty.easy,
         tags: const ['lunch', 'vegetarian'],
         steps: const [
           'Wash and chop lettuce and vegetables.',
@@ -227,6 +237,8 @@ final class DriftRecipeRepository implements RecipeRepository {
         id: 'seed-recipe-smoothie',
         title: 'Berry smoothie',
         prepTimeMinutes: 5,
+        servings: 1,
+        difficulty: RecipeDifficulty.easy,
         tags: const ['breakfast', 'drink'],
         steps: const [
           'Add berries, yogurt and milk to a blender.',

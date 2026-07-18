@@ -70,6 +70,8 @@ void main() {
       expect(snapshot.consumptionTotal, 3);
       expect(snapshot.wasteByProduct, {'p-bread': 0.5});
       expect(snapshot.wasteTotal, 0.5);
+      expect(snapshot.dailyConsumption.isNotEmpty, isTrue);
+      expect(snapshot.averageDailyUsage, greaterThan(0));
     });
 
     test('filters events by optional date range', () {

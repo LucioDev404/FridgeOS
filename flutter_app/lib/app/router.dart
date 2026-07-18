@@ -6,6 +6,7 @@ import 'package:fridgeos/features/history/presentation/history_screen.dart';
 import 'package:fridgeos/features/inventory/presentation/home_screen.dart';
 import 'package:fridgeos/features/inventory/presentation/inventory_screen.dart';
 import 'package:fridgeos/features/locations/presentation/locations_screen.dart';
+import 'package:fridgeos/features/recipes/presentation/recipe_detail_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipes_screen.dart';
 import 'package:fridgeos/features/settings/presentation/settings_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_screen.dart';
@@ -28,7 +29,22 @@ GoRouter createRouter() {
           _branch('/', const HomeScreen()),
           _branch('/inventory', const InventoryScreen()),
           _branch('/expiring', const ExpiringScreen()),
-          _branch('/recipes', const RecipesScreen()),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/recipes',
+                builder: (context, state) => const RecipesScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => RecipeDetailScreen(
+                      recipeId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           _branch('/shopping', const ShoppingScreen()),
           _branch('/history', const HistoryScreen()),
           _branch('/statistics', const StatisticsScreen()),

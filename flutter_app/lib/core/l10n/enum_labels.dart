@@ -40,8 +40,18 @@ extension InventoryEventTypeLabel on InventoryEventType {
     InventoryEventType.addProduct => l10n.eventAddProduct,
     InventoryEventType.removeProduct => l10n.eventRemoveProduct,
     InventoryEventType.updateQuantity => l10n.eventUpdateQuantity,
+    InventoryEventType.restock => l10n.eventRestock,
+    InventoryEventType.manualCorrection => l10n.eventManualCorrection,
     InventoryEventType.changeLocation => l10n.eventChangeLocation,
     InventoryEventType.consume => l10n.eventConsume,
     InventoryEventType.discard => l10n.eventDiscard,
+  };
+}
+
+extension RecipeDifficultyLabel on RecipeDifficulty {
+  String label(AppLocalizations l10n) => switch (this) {
+    RecipeDifficulty.easy => l10n.recipeDifficultyEasy,
+    RecipeDifficulty.medium => l10n.recipeDifficultyMedium,
+    RecipeDifficulty.hard => l10n.recipeDifficultyHard,
   };
 }

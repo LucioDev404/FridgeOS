@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/providers.dart';
 import 'package:fridgeos/data/providers.dart';
+import 'package:fridgeos/domain/entities/product.dart';
 import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/entities/user_preferences.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
@@ -11,6 +12,7 @@ import 'package:fridgeos/features/recipes/application/recipe_actions.dart';
 final recipeActionsProvider = Provider<RecipeActions>(
   (ref) => RecipeActions(
     recipes: ref.watch(recipeRepositoryProvider),
+    products: ref.watch(productRepositoryProvider),
     inventory: ref.watch(inventoryRepositoryProvider),
     shopping: ref.watch(shoppingRepositoryProvider),
     inventoryActions: ref.watch(inventoryActionsProvider),
@@ -27,6 +29,10 @@ final _recipesProvider = StreamProvider<List<Recipe>>(
 
 final _inventoryItemsForRecipesProvider = StreamProvider(
   (ref) => ref.watch(inventoryRepositoryProvider).watchActiveItems(),
+);
+
+final _productsForRecipesProvider = StreamProvider<List<Product>>(
+  (ref) => ref.watch(productRepositoryProvider).watchAll(),
 );
 
 /// Ranked recipe matches derived from live recipes and inventory.
@@ -59,11 +65,18 @@ final rankedRecipesProvider = Provider<AsyncValue<List<RecipeMatch>>>((ref) {
     expiringSoonWindowDays: window,
   );
 
+  final products = {
+    for (final product
+        in ref.watch(_productsForRecipesProvider).value ?? const <Product>[])
+      product.id: product,
+  };
+
   final available = items
       .where((i) => i.isActive && i.quantity.amount > 0)
       .map(
         (i) => AvailableInventoryItem(
           productId: i.productId,
+          productName: products[i.productId]?.name,
           amount: i.quantity.amount,
           expirationDate: i.expirationDate,
         ),

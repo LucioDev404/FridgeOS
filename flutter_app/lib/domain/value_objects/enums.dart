@@ -93,6 +93,8 @@ enum InventoryEventType {
   addProduct('ADD_PRODUCT'),
   removeProduct('REMOVE_PRODUCT'),
   updateQuantity('UPDATE_QUANTITY'),
+  restock('RESTOCK'),
+  manualCorrection('MANUAL_CORRECTION'),
   changeLocation('CHANGE_LOCATION'),
   consume('CONSUME'),
   discard('DISCARD');
@@ -156,5 +158,22 @@ enum RecipeSource {
     (s) => s.wire == wire,
     orElse: () =>
         throw ArgumentError.value(wire, 'wire', 'Unknown recipe source'),
+  );
+}
+
+/// Relative cooking difficulty for a recipe (persisted on schema v2+).
+enum RecipeDifficulty {
+  easy('EASY'),
+  medium('MEDIUM'),
+  hard('HARD');
+
+  const RecipeDifficulty(this.wire);
+
+  final String wire;
+
+  static RecipeDifficulty fromWire(String wire) => values.firstWhere(
+    (d) => d.wire == wire,
+    orElse: () =>
+        throw ArgumentError.value(wire, 'wire', 'Unknown recipe difficulty'),
   );
 }

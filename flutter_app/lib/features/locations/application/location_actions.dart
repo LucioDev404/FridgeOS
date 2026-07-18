@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/providers.dart';
+import 'package:fridgeos/core/error/failure.dart';
 import 'package:fridgeos/core/result.dart';
 import 'package:fridgeos/core/utils/clock.dart';
 import 'package:fridgeos/core/utils/id_generator.dart';
 import 'package:fridgeos/core/validation/input_sanitizer.dart';
 import 'package:fridgeos/data/providers.dart';
 import 'package:fridgeos/domain/entities/location.dart';
+import 'package:fridgeos/domain/repositories/inventory_repository.dart';
 import 'package:fridgeos/domain/repositories/location_repository.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
 
@@ -13,12 +15,14 @@ import 'package:fridgeos/domain/value_objects/enums.dart';
 final class LocationActions {
   const LocationActions({
     required this.locations,
+    required this.inventory,
     required this.sanitizer,
     required this.clock,
     required this.ids,
   });
 
   final LocationRepository locations;
+  final InventoryRepository inventory;
   final InputSanitizer sanitizer;
   final Clock clock;
   final IdGenerator ids;
@@ -70,12 +74,22 @@ final class LocationActions {
       ),
     );
   }
+
+  /// Soft-deletes [location] when no active inventory items remain in it.
+  Future<Result<void>> delete({required Location location}) async {
+    final items = await inventory.watchByLocation(location.id).first;
+    if (items.isNotEmpty) {
+      return const Result.failure(ValidationFailure('LOCATION_HAS_PRODUCTS'));
+    }
+    return locations.softDelete(location.id, clock.nowUtc());
+  }
 }
 
 /// Use-case facade for the locations feature.
 final locationActionsProvider = Provider<LocationActions>(
   (ref) => LocationActions(
     locations: ref.watch(locationRepositoryProvider),
+    inventory: ref.watch(inventoryRepositoryProvider),
     sanitizer: ref.watch(inputSanitizerProvider),
     clock: ref.watch(clockProvider),
     ids: ref.watch(idGeneratorProvider),

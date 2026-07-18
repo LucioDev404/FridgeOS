@@ -6,6 +6,7 @@ import 'package:fridgeos/domain/entities/inventory_item.dart';
 import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/entities/shopping_list_item.dart';
 import 'package:fridgeos/domain/repositories/inventory_repository.dart';
+import 'package:fridgeos/domain/repositories/product_repository.dart';
 import 'package:fridgeos/domain/repositories/recipe_repository.dart';
 import 'package:fridgeos/domain/repositories/shopping_repository.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
@@ -17,6 +18,7 @@ import 'package:fridgeos/features/inventory/application/inventory_actions.dart';
 final class RecipeActions {
   const RecipeActions({
     required this.recipes,
+    required this.products,
     required this.inventory,
     required this.shopping,
     required this.inventoryActions,
@@ -27,6 +29,7 @@ final class RecipeActions {
   });
 
   final RecipeRepository recipes;
+  final ProductRepository products;
   final InventoryRepository inventory;
   final ShoppingRepository shopping;
   final InventoryActions inventoryActions;
@@ -42,11 +45,14 @@ final class RecipeActions {
     DateOnly? today,
   }) async {
     final recipeList = await recipes.watchAll().first;
+    final catalog = await products.watchAll().first;
+    final namesById = {for (final product in catalog) product.id: product.name};
     final available = items
         .where((i) => i.isActive && i.quantity.amount > 0)
         .map(
           (i) => AvailableInventoryItem(
             productId: i.productId,
+            productName: namesById[i.productId],
             amount: i.quantity.amount,
             expirationDate: i.expirationDate,
           ),

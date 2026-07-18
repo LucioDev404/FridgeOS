@@ -47,6 +47,8 @@ final class Recipe {
     required this.ingredients,
     required this.createdAt,
     required this.updatedAt,
+    this.servings,
+    this.difficulty,
     this.deletedAt,
   });
 
@@ -59,6 +61,12 @@ final class Recipe {
   final List<RecipeIngredient> ingredients;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Optional number of servings (schema v2+).
+  final int? servings;
+
+  /// Optional difficulty (schema v2+).
+  final RecipeDifficulty? difficulty;
   final DateTime? deletedAt;
 
   bool get isDeleted => deletedAt != null;
@@ -77,6 +85,8 @@ final class Recipe {
       _listEquals(other.tags, tags) &&
       other.source == source &&
       _listEquals(other.ingredients, ingredients) &&
+      other.servings == servings &&
+      other.difficulty == difficulty &&
       other.createdAt == createdAt &&
       other.updatedAt == updatedAt &&
       other.deletedAt == deletedAt;
@@ -90,6 +100,8 @@ final class Recipe {
     Object.hashAll(tags),
     source,
     Object.hashAll(ingredients),
+    servings,
+    difficulty,
     createdAt,
     updatedAt,
     deletedAt,

@@ -4,42 +4,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/domain/entities/location.dart';
+import 'package:fridgeos/domain/entities/product.dart';
+import 'package:fridgeos/domain/value_objects/barcode.dart';
 import 'package:fridgeos/domain/value_objects/date_only.dart';
 import 'package:fridgeos/domain/value_objects/enums.dart';
+import 'package:fridgeos/features/inventory/application/inventory_line_item.dart';
 import 'package:fridgeos/features/inventory/application/inventory_providers.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 
-/// Opens the "add a product manually" modal sheet.
-Future<void> showAddItemSheet(BuildContext context) {
+/// Opens the edit-product sheet for [line]. Updates the product snapshot and
+/// item metadata without rewriting historical inventory events.
+Future<void> showEditProductSheet(
+  BuildContext context, {
+  required InventoryLineItem line,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => const _AddItemForm(),
+    builder: (context) => _EditProductForm(line: line),
   );
 }
 
-class _AddItemForm extends ConsumerStatefulWidget {
-  const _AddItemForm();
+class _EditProductForm extends ConsumerStatefulWidget {
+  const _EditProductForm({required this.line});
+
+  final InventoryLineItem line;
 
   @override
-  ConsumerState<_AddItemForm> createState() => _AddItemFormState();
+  ConsumerState<_EditProductForm> createState() => _EditProductFormState();
 }
 
-class _AddItemFormState extends ConsumerState<_AddItemForm> {
+class _EditProductFormState extends ConsumerState<_EditProductForm> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _brandController = TextEditingController();
-  final _barcodeController = TextEditingController();
-  final _quantityController = TextEditingController(text: '1');
-  final _thresholdController = TextEditingController();
-  final _noteController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _brandController;
+  late final TextEditingController _barcodeController;
+  late final TextEditingController _quantityController;
+  late final TextEditingController _thresholdController;
+  late final TextEditingController _noteController;
 
-  FoodCategory _category = FoodCategory.other;
-  MeasurementUnit _unit = MeasurementUnit.pieces;
-  String? _locationId;
-  DateOnly? _expiration;
+  late FoodCategory _category;
+  late MeasurementUnit _unit;
+  late String? _locationId;
+  late DateOnly? _expiration;
   bool _submitting = false;
+
+  Product get _product => widget.line.product;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.line.item;
+    _nameController = TextEditingController(text: _product.name);
+    _brandController = TextEditingController(text: _product.brand ?? '');
+    _barcodeController = TextEditingController(
+      text: _product.barcode?.value ?? '',
+    );
+    _quantityController = TextEditingController(
+      text: item.quantity.amount.toString(),
+    );
+    _thresholdController = TextEditingController(
+      text: item.lowStockThreshold?.toString() ?? '',
+    );
+    _noteController = TextEditingController(text: item.note ?? '');
+    _category = _product.category;
+    _unit = item.quantity.unit;
+    _locationId = item.locationId;
+    _expiration = item.expirationDate;
+  }
 
   @override
   void dispose() {
@@ -56,8 +89,6 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locations = ref.watch(locationsProvider).value ?? const [];
-    _locationId ??= locations.isNotEmpty ? locations.first.id : null;
-
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -75,7 +106,7 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                l10n.addProductTitle,
+                l10n.editProductTitle,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -98,18 +129,7 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
                   labelText: '${l10n.fieldBarcode} (${l10n.optionalSuffix})',
                   border: const OutlineInputBorder(),
                 ),
-                validator: (v) {
-                  final trimmed = (v ?? '').trim();
-                  if (trimmed.isEmpty) return null;
-                  // Defer to InventoryActions / Barcode.tryParse on submit;
-                  // length check keeps the form snappy.
-                  if (trimmed.length != 8 &&
-                      trimmed.length != 12 &&
-                      trimmed.length != 13) {
-                    return l10n.invalidBarcode;
-                  }
-                  return null;
-                },
+                validator: _validateBarcode,
               ),
               const SizedBox(height: AppSpacing.md),
               TextFormField(
@@ -212,7 +232,7 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
               const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: _submitting ? null : () => _submit(l10n),
-                child: Text(l10n.add),
+                child: Text(l10n.save),
               ),
             ],
           ),
@@ -264,7 +284,9 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: _expiration == null
+          ? now
+          : DateTime(_expiration!.year, _expiration!.month, _expiration!.day),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
     );
@@ -275,8 +297,17 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
   String? _validateQuantity(String? value) {
     final l10n = AppLocalizations.of(context);
     final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
-    if (parsed == null || parsed <= 0 || !parsed.isFinite) {
+    if (parsed == null || parsed < 0 || !parsed.isFinite) {
       return l10n.invalidQuantity;
+    }
+    return null;
+  }
+
+  String? _validateBarcode(String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty) return null;
+    if (Barcode.tryParse(trimmed) == null) {
+      return AppLocalizations.of(context).invalidBarcode;
     }
     return null;
   }
@@ -289,14 +320,17 @@ class _AddItemFormState extends ConsumerState<_AddItemForm> {
     setState(() => _submitting = true);
     final actions = ref.read(inventoryActionsProvider);
     final amount = double.parse(_quantityController.text.replaceAll(',', '.'));
-    final threshold = double.tryParse(
-      _thresholdController.text.replaceAll(',', '.'),
-    );
+    final thresholdText = _thresholdController.text.trim();
+    final threshold = thresholdText.isEmpty
+        ? null
+        : double.tryParse(thresholdText.replaceAll(',', '.'));
 
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    final result = await actions.addManualItem(
+    final result = await actions.updateItemDetails(
+      product: _product,
+      item: widget.line.item,
       name: _nameController.text,
       brand: _brandController.text,
       barcode: _barcodeController.text,
