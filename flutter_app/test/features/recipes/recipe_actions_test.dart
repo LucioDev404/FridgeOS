@@ -104,8 +104,13 @@ void main() {
     final match = RecipeMatch(
       recipe: recipe,
       score: 0,
-      missingIngredientNames: const ['Carrots'],
-      availableIngredientNames: const [],
+      ingredientDetails: const [
+        IngredientMatchDetail(
+          ingredientName: 'Carrots',
+          kind: IngredientMatchKind.missing,
+          optional: false,
+        ),
+      ],
       availableCount: 0,
       requiredCount: 1,
     );

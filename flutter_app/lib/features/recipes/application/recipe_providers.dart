@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/providers.dart';
 import 'package:fridgeos/data/providers.dart';
+import 'package:fridgeos/domain/entities/location.dart';
 import 'package:fridgeos/domain/entities/product.dart';
 import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/entities/user_preferences.dart';
@@ -40,8 +41,11 @@ final availableInventoryForRecipesProvider =
     Provider<AsyncValue<List<AvailableInventoryItem>>>((ref) {
       final itemsAsync = ref.watch(_inventoryItemsForRecipesProvider);
       final productsAsync = ref.watch(_productsForRecipesProvider);
+      final locationsAsync = ref.watch(locationsProvider);
 
-      if (itemsAsync.isLoading || productsAsync.isLoading) {
+      if (itemsAsync.isLoading ||
+          productsAsync.isLoading ||
+          locationsAsync.isLoading) {
         return const AsyncValue.loading();
       }
       if (itemsAsync.hasError) {
@@ -53,10 +57,20 @@ final availableInventoryForRecipesProvider =
           productsAsync.stackTrace!,
         );
       }
+      if (locationsAsync.hasError) {
+        return AsyncValue.error(
+          locationsAsync.error!,
+          locationsAsync.stackTrace!,
+        );
+      }
 
       final products = {
         for (final product in productsAsync.value ?? const <Product>[])
           product.id: product,
+      };
+      final locations = {
+        for (final location in locationsAsync.value ?? const <Location>[])
+          location.id: location,
       };
       final items = itemsAsync.value ?? const [];
       final available = items
@@ -65,6 +79,7 @@ final availableInventoryForRecipesProvider =
             (i) => AvailableInventoryItem(
               productId: i.productId,
               productName: products[i.productId]?.name,
+              locationName: locations[i.locationId]?.name,
               amount: i.quantity.amount,
               expirationDate: i.expirationDate,
             ),

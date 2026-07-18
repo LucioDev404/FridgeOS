@@ -7,6 +7,7 @@ import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/recipes/application/recipe_actions.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
+import 'package:fridgeos/features/recipes/presentation/widgets/recipe_image.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
@@ -34,7 +35,7 @@ class RecipesScreen extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.all(AppSpacing.lg),
           itemCount: matches.length,
-          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
           itemBuilder: (context, index) {
             final match = matches[index];
             return _RecipeCard(match: match, actions: actions);
@@ -56,125 +57,173 @@ class _RecipeCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final recipe = match.recipe;
-    final coverage = match.requiredCount == 0
-        ? 1.0
-        : match.availableCount / match.requiredCount;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+    return Material(
+      color: theme.colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/recipes/${recipe.id}'),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(recipe.title, style: theme.textTheme.titleMedium),
-                ),
-                Text(
-                  l10n.recipeCompletionPercent(match.completionPercent),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  RecipeImage(
+                    imageUrl: recipe.imageUrl,
+                    cuisine: recipe.cuisine,
+                    borderRadius: BorderRadius.zero,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                if (recipe.difficulty != null) ...[
-                  Text(
-                    recipe.difficulty!.label(l10n),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Text(
-                    ' · ',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  Positioned(
+                    top: AppSpacing.sm,
+                    right: AppSpacing.sm,
+                    child: _MatchBadge(
+                      percent: match.completionPercent,
+                      ready: match.isReadyToCook,
                     ),
                   ),
                 ],
-                Text(
-                  l10n.recipePrepTime(recipe.prepTimeMinutes),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (recipe.servings != null) ...[
-                  Text(
-                    ' · ',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Text(
-                    l10n.recipeServings(recipe.servings!),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value: coverage,
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(recipe.title, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      if (recipe.cuisine != null)
+                        Chip(
+                          label: Text(recipe.cuisine!),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      Chip(
+                        label: Text(
+                          l10n.recipePrepTime(recipe.prepTimeMinutes),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      if (recipe.difficulty != null)
+                        Chip(
+                          label: Text(recipe.difficulty!.label(l10n)),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      if (match.isReadyToCook)
+                        Chip(
+                          avatar: const Icon(Icons.check_circle, size: 16),
+                          label: Text(l10n.recipeReadyToCook),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  LinearProgressIndicator(
+                    value: match.completionRatio,
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  l10n.recipeAvailability(
-                    match.availableCount,
-                    match.requiredCount,
-                  ),
-                  style: theme.textTheme.labelMedium,
-                ),
-              ],
-            ),
-            if (match.missingIngredientNames.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                l10n.recipeMissingIngredients(
-                  match.missingIngredientNames.join(', '),
-                ),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => context.push('/recipes/${recipe.id}'),
-                  icon: const Icon(Icons.menu_book_outlined),
-                  label: Text(l10n.recipeViewDetails),
-                ),
-                if (match.missingIngredientNames.isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: () => runWithFeedback(
-                      context,
-                      actions.addMissingToShopping(match),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (match.availableIngredientNames.isNotEmpty)
+                    Text(
+                      l10n.recipeAvailableIngredients(
+                        match.availableIngredientNames.join(', '),
+                      ),
+                      style: theme.textTheme.bodySmall,
                     ),
-                    icon: const Icon(Icons.add_shopping_cart_outlined),
-                    label: Text(l10n.recipeAddMissing),
+                  if (match.missingIngredientNames.isNotEmpty)
+                    Text(
+                      l10n.recipeMissingIngredients(
+                        match.missingIngredientNames.join(', '),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  if (match.optionalIngredientNames.isNotEmpty)
+                    Text(
+                      l10n.recipeOptionalIngredients(
+                        match.optionalIngredientNames.join(', '),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  if (match.suggestedSubstitutions.isNotEmpty)
+                    Text(
+                      l10n.recipeSubstitutions(
+                        match.suggestedSubstitutions.join(' · '),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: () => context.push('/recipes/${recipe.id}'),
+                        icon: const Icon(Icons.menu_book_outlined),
+                        label: Text(l10n.recipeViewDetails),
+                      ),
+                      if (match.missingIngredientNames.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => runWithFeedback(
+                            context,
+                            actions.addMissingToShopping(match),
+                          ),
+                          icon: const Icon(Icons.add_shopping_cart_outlined),
+                          label: Text(l10n.recipeAddMissing),
+                        ),
+                      if (match.isReadyToCook)
+                        FilledButton.icon(
+                          onPressed: () =>
+                              runWithFeedback(context, actions.cooked(recipe)),
+                          icon: const Icon(Icons.restaurant_outlined),
+                          label: Text(l10n.recipeCookNow),
+                        ),
+                    ],
                   ),
-                FilledButton.icon(
-                  onPressed: () =>
-                      runWithFeedback(context, actions.cooked(recipe)),
-                  icon: const Icon(Icons.restaurant_outlined),
-                  label: Text(l10n.recipeCooked),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchBadge extends StatelessWidget {
+  const _MatchBadge({required this.percent, required this.ready});
+
+  final int percent;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: ready
+          ? theme.colorScheme.primaryContainer
+          : theme.colorScheme.surface.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        child: Text(
+          '$percent%',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

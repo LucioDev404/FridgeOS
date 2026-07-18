@@ -93,16 +93,14 @@ final class DriftRecipeRepository implements RecipeRepository {
     await _seedMissingBuiltinRecipes();
   }
 
-  /// Inserts any builtin catalog recipes whose ids are not yet stored.
+  /// Upserts every builtin catalog recipe.
   ///
-  /// Existing rows are left untouched so user edits (future) and installed
-  /// devices keep local changes. New catalog entries appear on next launch.
+  /// New ids are inserted; existing builtin rows are refreshed so catalog
+  /// metadata (images, cuisine, substitutions) stays current. User-authored
+  /// recipes keep distinct ids and are never touched.
   Future<void> _seedMissingBuiltinRecipes() async {
-    final existing = await (_db.select(_db.recipes)).get();
-    final existingIds = existing.map((r) => r.id).toSet();
     final catalog = BuiltinRecipeCatalog.build(DateTime.now().toUtc());
     for (final recipe in catalog) {
-      if (existingIds.contains(recipe.id)) continue;
       await upsert(recipe);
     }
   }

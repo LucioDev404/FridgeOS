@@ -219,6 +219,9 @@ Recipe recipeFromRow(RecipeRow row, List<RecipeIngredient> ingredients) =>
       tags: _decodeStringList(row.tagsJson),
       source: RecipeSource.fromWire(row.source),
       ingredients: ingredients,
+      description: row.description,
+      cuisine: row.cuisine,
+      imageUrl: row.imageUrl,
       servings: row.servings,
       difficulty: row.difficulty == null
           ? null
@@ -241,6 +244,7 @@ RecipeIngredient recipeIngredientFromRow(RecipeIngredientRow row) =>
               MeasurementUnit.fromWire(row.quantityUnit!),
             ),
       optional: row.optional,
+      substitutions: _decodeStringList(row.substitutionsJson),
     );
 
 RecipesCompanion recipeToCompanion(Recipe recipe) => RecipesCompanion(
@@ -250,6 +254,9 @@ RecipesCompanion recipeToCompanion(Recipe recipe) => RecipesCompanion(
   stepsJson: Value(_encodeStringList(recipe.steps)),
   tagsJson: Value(_encodeStringList(recipe.tags)),
   source: Value(recipe.source.wire),
+  description: Value(recipe.description),
+  cuisine: Value(recipe.cuisine),
+  imageUrl: Value(recipe.imageUrl),
   servings: Value(recipe.servings),
   difficulty: Value(recipe.difficulty?.wire),
   createdAt: Value(_msFromDateTime(recipe.createdAt)),
@@ -269,6 +276,7 @@ RecipeIngredientsCompanion recipeIngredientToCompanion(
   quantityAmount: Value(ingredient.quantity?.amount),
   quantityUnit: Value(ingredient.quantity?.unit.wire),
   optional: Value(ingredient.optional),
+  substitutionsJson: Value(_encodeStringList(ingredient.substitutions)),
 );
 
 // ---------------------------------------------------------------------------

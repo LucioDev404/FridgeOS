@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
-  test('migrates v1 database to v2 without losing product rows', () async {
+  test('migrates v1 database to v3 without losing product rows', () async {
     final dir = await Directory.systemTemp.createTemp('fridgeos-mig-');
     addTearDown(() => dir.delete(recursive: true));
     final file = File(p.join(dir.path, 'fridgeos.sqlite'));
@@ -171,11 +171,28 @@ void main() {
 
     final columns = await db.customSelect('PRAGMA table_info(recipes)').get();
     final names = columns.map((r) => r.read<String>('name')).toSet();
-    expect(names, containsAll(<String>['servings', 'difficulty']));
+    expect(
+      names,
+      containsAll(<String>[
+        'servings',
+        'difficulty',
+        'description',
+        'cuisine',
+        'image_url',
+      ]),
+    );
+
+    final ingredientColumns = await db
+        .customSelect('PRAGMA table_info(recipe_ingredients)')
+        .get();
+    final ingredientNames = ingredientColumns
+        .map((r) => r.read<String>('name'))
+        .toSet();
+    expect(ingredientNames, contains('substitutions_json'));
 
     final meta = await (db.select(
       db.appMeta,
     )..where((t) => t.key.equals('schema_version'))).getSingle();
-    expect(meta.value, '2');
+    expect(meta.value, '3');
   });
 }

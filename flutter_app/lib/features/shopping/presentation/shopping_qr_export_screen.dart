@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
-import 'package:fridgeos/domain/services/shopping_list_qr_codec.dart';
+import 'package:fridgeos/domain/services/shopping_list_export.dart';
 import 'package:fridgeos/features/shopping/application/shopping_providers.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 import 'package:path/path.dart' as p;
@@ -26,10 +26,10 @@ class ShoppingQrExportScreen extends ConsumerStatefulWidget {
 class _ShoppingQrExportScreenState
     extends ConsumerState<ShoppingQrExportScreen> {
   final _qrKey = GlobalKey();
-  final _codec = const ShoppingListQrCodec();
+  final _formatter = const ShoppingListExportFormatter();
   var _sharing = false;
 
-  Future<void> _sharePng(String payloadJson) async {
+  Future<void> _sharePng(String payload) async {
     if (_sharing) return;
     setState(() => _sharing = true);
     try {
@@ -41,28 +41,25 @@ class _ShoppingQrExportScreenState
       image.dispose();
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
-      await _shareBytes(bytes, payloadJson: payloadJson);
+      await _shareBytes(bytes, payload: payload);
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
   }
 
-  Future<void> _shareBytes(
-    Uint8List bytes, {
-    required String payloadJson,
-  }) async {
+  Future<void> _shareBytes(Uint8List bytes, {required String payload}) async {
     final dir = await getTemporaryDirectory();
     final file = File(
       p.join(
         dir.path,
-        'fridgeos-shopping-list-${DateTime.now().millisecondsSinceEpoch}.png',
+        'fridgeos-shopping-qr-${DateTime.now().millisecondsSinceEpoch}.png',
       ),
     );
     await file.writeAsBytes(bytes, flush: true);
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'image/png')],
-        text: payloadJson,
+        text: payload,
         subject: 'FridgeOS shopping list',
       ),
     );
@@ -91,8 +88,8 @@ class _ShoppingQrExportScreenState
           );
         }
 
-        final payload = _codec.encodePending(items);
-        final json = payload.encode();
+        final payload = _formatter.toHumanReadableQr(items);
+        final itemCount = items.length;
 
         return SafeArea(
           child: Padding(
@@ -121,7 +118,7 @@ class _ShoppingQrExportScreenState
                             child: RepaintBoundary(
                               key: _qrKey,
                               child: QrImageView(
-                                data: json,
+                                data: payload,
                                 version: QrVersions.auto,
                                 backgroundColor: Colors.white,
                                 eyeStyle: const QrEyeStyle(
@@ -142,12 +139,12 @@ class _ShoppingQrExportScreenState
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  l10n.shoppingQrItemCount(payload.items.length),
+                  l10n.shoppingQrItemCount(itemCount),
                   style: theme.textTheme.labelLarge,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 FilledButton.icon(
-                  onPressed: _sharing ? null : () => _sharePng(json),
+                  onPressed: _sharing ? null : () => _sharePng(payload),
                   icon: _sharing
                       ? const SizedBox(
                           width: 18,

@@ -113,7 +113,7 @@ final class ShoppingListQrCodec {
     );
   }
 
-  /// Parses and validates a QR string. Rejects malformed / unsupported payloads.
+  /// Parses and validates a QR string. Accepts JSON v1 or human-readable lists.
   Result<ShoppingListQrPayload> decode(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -125,6 +125,56 @@ final class ShoppingListQrCodec {
       );
     }
 
+    if (trimmed.startsWith('{')) {
+      return _decodeJson(trimmed);
+    }
+    return _decodeHumanReadable(trimmed);
+  }
+
+  Result<ShoppingListQrPayload> _decodeHumanReadable(String raw) {
+    final lines = raw
+        .split(RegExp(r'[\r\n]+'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      return const Result.failure(ValidationFailure('Shopping QR is empty'));
+    }
+
+    final items = <ShoppingListQrItem>[];
+    for (final line in lines) {
+      final lower = line.toLowerCase();
+      if (lower.startsWith('fridgeos') || lower == 'shopping list') {
+        continue;
+      }
+      var cleaned = line
+          .replaceFirst(RegExp(r'^[-•*☐]\s*'), '')
+          .replaceFirst(RegExp(r'^\[\s*\]\s*'), '')
+          .trim();
+      if (cleaned.isEmpty) continue;
+
+      double? quantity;
+      final qtyMatch = RegExp(
+        r'^(.*?)(?:\s*[x×]\s*(\d+(?:\.\d+)?))\s*$',
+        caseSensitive: false,
+      ).firstMatch(cleaned);
+      if (qtyMatch != null) {
+        cleaned = qtyMatch.group(1)!.trim();
+        quantity = double.tryParse(qtyMatch.group(2)!);
+      }
+      if (cleaned.isEmpty || cleaned.length > 200) continue;
+      items.add(ShoppingListQrItem(name: cleaned, quantity: quantity));
+    }
+
+    if (items.isEmpty) {
+      return const Result.failure(
+        ValidationFailure('Shopping QR has no items'),
+      );
+    }
+    return Result.success(ShoppingListQrPayload(items: items));
+  }
+
+  Result<ShoppingListQrPayload> _decodeJson(String trimmed) {
     late final Object? decoded;
     try {
       decoded = jsonDecode(trimmed);

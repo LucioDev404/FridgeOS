@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/utils/number_format.dart';
+import 'package:fridgeos/domain/value_objects/enums.dart';
 import 'package:fridgeos/features/inventory/application/inventory_actions.dart';
 import 'package:fridgeos/features/inventory/application/inventory_line_item.dart';
 import 'package:fridgeos/features/inventory/application/inventory_providers.dart';
@@ -59,12 +60,32 @@ class InventoryTile extends ConsumerWidget {
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.xs,
                     children: [
+                      Chip(
+                        avatar: Icon(
+                          _locationIcon(line.location.type),
+                          size: 16,
+                        ),
+                        label: Text(line.location.name),
+                        visualDensity: VisualDensity.compact,
+                      ),
                       if (line.item.expirationDate != null)
                         ExpirationBadge(
                           status: line.status,
                           daysToExpiry: line.daysToExpiry,
                         ),
                       if (line.isBelowThreshold) _LowStockChip(),
+                      Text(
+                        l10n.inventoryAddedOn(
+                          line.item.createdAt
+                              .toLocal()
+                              .toIso8601String()
+                              .split('T')
+                              .first,
+                        ),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -104,10 +125,20 @@ class InventoryTile extends ConsumerWidget {
   }
 
   String _subtitle(AppLocalizations l10n) {
-    final brand = line.product.brand;
-    final location = line.location.name;
-    return brand == null || brand.isEmpty ? location : '$brand · $location';
+    final parts = <String>[
+      line.product.category.label(l10n),
+      line.location.name,
+      if (line.product.brand != null && line.product.brand!.isNotEmpty)
+        line.product.brand!,
+    ];
+    return parts.join(' · ');
   }
+
+  IconData _locationIcon(LocationType type) => switch (type) {
+    LocationType.refrigerator => Icons.kitchen_outlined,
+    LocationType.freezer => Icons.ac_unit_outlined,
+    LocationType.pantry => Icons.inventory_2_outlined,
+  };
 
   Future<void> _onMenu(
     BuildContext context,

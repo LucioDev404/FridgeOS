@@ -102,9 +102,9 @@ class _ShoppingScreenState extends ConsumerState<ShoppingScreen> {
                 label: Text(l10n.shoppingRefreshProposals),
               ),
               OutlinedButton.icon(
-                onPressed: () => context.push('/shopping/qr-export'),
-                icon: const Icon(Icons.qr_code_2_outlined),
-                label: Text(l10n.shoppingQrShare),
+                onPressed: () => context.push('/shopping/export'),
+                icon: const Icon(Icons.ios_share_outlined),
+                label: Text(l10n.shoppingExport),
               ),
               OutlinedButton.icon(
                 onPressed: () => context.push('/shopping/qr-import'),

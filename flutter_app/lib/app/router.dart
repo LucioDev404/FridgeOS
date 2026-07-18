@@ -9,6 +9,7 @@ import 'package:fridgeos/features/locations/presentation/locations_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipe_detail_screen.dart';
 import 'package:fridgeos/features/recipes/presentation/recipes_screen.dart';
 import 'package:fridgeos/features/settings/presentation/settings_screen.dart';
+import 'package:fridgeos/features/shopping/presentation/shopping_list_export_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_qr_export_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_qr_import_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_screen.dart';
@@ -56,6 +57,11 @@ GoRouter createRouter() {
                 path: '/shopping',
                 builder: (context, state) => const ShoppingScreen(),
                 routes: [
+                  GoRoute(
+                    path: 'export',
+                    builder: (context, state) =>
+                        const ShoppingListExportScreen(),
+                  ),
                   GoRoute(
                     path: 'qr-export',
                     builder: (context, state) => const ShoppingQrExportScreen(),

@@ -11,6 +11,7 @@ final class RecipeIngredient {
     this.productId,
     this.quantity,
     this.optional = false,
+    this.substitutions = const <String>[],
   });
 
   final String id;
@@ -20,6 +21,12 @@ final class RecipeIngredient {
   final Quantity? quantity;
   final bool optional;
 
+  /// Explicit alternate names that may satisfy this ingredient.
+  ///
+  /// Never inferred from fuzzy similarity — only these names (plus an exact
+  /// match on [name]) count as available for scoring.
+  final List<String> substitutions;
+
   @override
   bool operator ==(Object other) =>
       other is RecipeIngredient &&
@@ -28,11 +35,42 @@ final class RecipeIngredient {
       other.productId == productId &&
       other.name == name &&
       other.quantity == quantity &&
-      other.optional == optional;
+      other.optional == optional &&
+      _listEquals(other.substitutions, substitutions);
 
   @override
-  int get hashCode =>
-      Object.hash(id, recipeId, productId, name, quantity, optional);
+  int get hashCode => Object.hash(
+    id,
+    recipeId,
+    productId,
+    name,
+    quantity,
+    optional,
+    Object.hashAll(substitutions),
+  );
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/// How an inventory product relates to a recipe ingredient.
+enum IngredientMatchKind {
+  /// Normalized name / productId equality.
+  exact,
+
+  /// Explicit substitution listed on the ingredient.
+  substitution,
+
+  /// Related wording only (e.g. tomato sauce vs tomatoes) — never counts as stock.
+  partial,
+
+  /// Not found in inventory.
+  missing,
 }
 
 /// A recipe with ordered preparation steps and its ingredient list.
@@ -47,6 +85,9 @@ final class Recipe {
     required this.ingredients,
     required this.createdAt,
     required this.updatedAt,
+    this.description,
+    this.cuisine,
+    this.imageUrl,
     this.servings,
     this.difficulty,
     this.deletedAt,
@@ -62,6 +103,15 @@ final class Recipe {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Short blurb shown on the detail page.
+  final String? description;
+
+  /// Primary cuisine label (e.g. Italian, Japanese). Also mirrored in [tags].
+  final String? cuisine;
+
+  /// Remote or asset URL for the hero / card image.
+  final String? imageUrl;
+
   /// Optional number of servings (schema v2+).
   final int? servings;
 
@@ -75,6 +125,9 @@ final class Recipe {
   Iterable<RecipeIngredient> get requiredIngredients =>
       ingredients.where((i) => !i.optional);
 
+  Iterable<RecipeIngredient> get optionalIngredients =>
+      ingredients.where((i) => i.optional);
+
   @override
   bool operator ==(Object other) =>
       other is Recipe &&
@@ -85,6 +138,9 @@ final class Recipe {
       _listEquals(other.tags, tags) &&
       other.source == source &&
       _listEquals(other.ingredients, ingredients) &&
+      other.description == description &&
+      other.cuisine == cuisine &&
+      other.imageUrl == imageUrl &&
       other.servings == servings &&
       other.difficulty == difficulty &&
       other.createdAt == createdAt &&
@@ -100,6 +156,9 @@ final class Recipe {
     Object.hashAll(tags),
     source,
     Object.hashAll(ingredients),
+    description,
+    cuisine,
+    imageUrl,
     servings,
     difficulty,
     createdAt,

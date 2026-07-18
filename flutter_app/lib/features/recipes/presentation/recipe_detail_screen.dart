@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
 import 'package:fridgeos/core/l10n/enum_labels.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
+import 'package:fridgeos/domain/entities/recipe.dart';
+import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
+import 'package:fridgeos/features/recipes/presentation/widgets/recipe_image.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 
-/// Full offline recipe detail: ingredients, steps, time, difficulty, servings.
-///
-/// AppBar / Back are owned by [ShellScaffold] so nested navigation never traps
-/// the user without a visible return control.
+/// Full offline recipe detail with hero image and match breakdown.
 class RecipeDetailScreen extends ConsumerWidget {
   const RecipeDetailScreen({required this.recipeId, super.key});
 
@@ -38,144 +38,198 @@ class RecipeDetailScreen extends ConsumerWidget {
         final theme = Theme.of(context);
 
         return ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: EdgeInsets.zero,
           children: [
             AspectRatio(
-              aspectRatio: 16 / 9,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.restaurant_menu_outlined,
-                    size: 56,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
+              aspectRatio: 16 / 10,
+              child: RecipeImage(
+                imageUrl: recipe.imageUrl,
+                cuisine: recipe.cuisine,
+                borderRadius: BorderRadius.zero,
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(recipe.title, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.sm,
-              children: [
-                Chip(label: Text(l10n.recipePrepTime(recipe.prepTimeMinutes))),
-                if (recipe.servings != null)
-                  Chip(label: Text(l10n.recipeServings(recipe.servings!))),
-                if (recipe.difficulty != null)
-                  Chip(
-                    label: Text(
-                      '${l10n.recipeDifficultyLabel}: ${recipe.difficulty!.label(l10n)}',
-                    ),
-                  ),
-                Chip(
-                  label: Text(
-                    l10n.recipeCompletionPercent(match.completionPercent),
-                  ),
-                ),
-                Chip(
-                  label: Text(
-                    l10n.recipeAvailability(
-                      match.availableCount,
-                      match.requiredCount,
-                    ),
-                  ),
-                ),
-                for (final tag in recipe.tags)
-                  Chip(label: Text(tag), visualDensity: VisualDensity.compact),
-              ],
-            ),
-            if (match.availableIngredientNames.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                l10n.recipeAvailableIngredients(
-                  match.availableIngredientNames.join(', '),
-                ),
-                style: theme.textTheme.bodyMedium,
-              ),
-            ],
-            if (match.missingIngredientNames.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                l10n.recipeMissingIngredients(
-                  match.missingIngredientNames.join(', '),
-                ),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              l10n.recipeIngredientsSection,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            for (final ingredient in recipe.ingredients)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  ingredient.optional
-                      ? Icons.radio_button_unchecked
-                      : match.availableIngredientNames.contains(ingredient.name)
-                      ? Icons.check_circle
-                      : Icons.cancel_outlined,
-                  color: ingredient.optional
-                      ? theme.colorScheme.onSurfaceVariant
-                      : match.availableIngredientNames.contains(ingredient.name)
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.error,
-                ),
-                title: Text(ingredient.name),
-                subtitle: ingredient.quantity == null
-                    ? null
-                    : Text(
-                        '${ingredient.quantity!.amount} ${ingredient.quantity!.unit.label(l10n)}',
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(recipe.title, style: theme.textTheme.headlineSmall),
+                  if (recipe.description != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      recipe.description!,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                trailing: ingredient.optional
-                    ? Text(
-                        l10n.optionalSuffix,
-                        style: theme.textTheme.labelSmall,
-                      )
-                    : null,
-              ),
-            const Divider(height: AppSpacing.xl),
-            Text(l10n.recipeStepsSection, style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.sm),
-            for (var i = 0; i < recipe.steps.length; i++)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(radius: 14, child: Text('${i + 1}')),
-                title: Text(recipe.steps[i]),
-              ),
-            const SizedBox(height: AppSpacing.xl),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                if (match.missingIngredientNames.isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: () => runWithFeedback(
-                      context,
-                      actions.addMissingToShopping(match),
                     ),
-                    icon: const Icon(Icons.add_shopping_cart_outlined),
-                    label: Text(l10n.recipeAddMissing),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      if (recipe.cuisine != null)
+                        Chip(label: Text(recipe.cuisine!)),
+                      Chip(
+                        label: Text(
+                          l10n.recipePrepTime(recipe.prepTimeMinutes),
+                        ),
+                      ),
+                      if (recipe.servings != null)
+                        Chip(
+                          label: Text(l10n.recipeServings(recipe.servings!)),
+                        ),
+                      if (recipe.difficulty != null)
+                        Chip(
+                          label: Text(
+                            '${l10n.recipeDifficultyLabel}: ${recipe.difficulty!.label(l10n)}',
+                          ),
+                        ),
+                      Chip(
+                        label: Text(
+                          l10n.recipeCompletionPercent(match.completionPercent),
+                        ),
+                      ),
+                      if (match.isReadyToCook)
+                        Chip(
+                          avatar: const Icon(Icons.check_circle, size: 16),
+                          label: Text(l10n.recipeReadyToCook),
+                        ),
+                    ],
                   ),
-                FilledButton.icon(
-                  onPressed: () =>
-                      runWithFeedback(context, actions.cooked(recipe)),
-                  icon: const Icon(Icons.restaurant_outlined),
-                  label: Text(l10n.recipeCooked),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(
+                    l10n.recipeIngredientsSection,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final detail in match.ingredientDetails)
+                    _IngredientRow(detail: detail, recipe: recipe),
+                  if (match.suggestedSubstitutions.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      l10n.recipeSubstitutionsSection,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(match.suggestedSubstitutions.join('\n')),
+                  ],
+                  const Divider(height: AppSpacing.xl),
+                  Text(
+                    l10n.recipeStepsSection,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (var i = 0; i < recipe.steps.length; i++)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        radius: 14,
+                        child: Text('${i + 1}'),
+                      ),
+                      title: Text(recipe.steps[i]),
+                    ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      if (match.isReadyToCook)
+                        FilledButton.icon(
+                          onPressed: () =>
+                              runWithFeedback(context, actions.cooked(recipe)),
+                          icon: const Icon(Icons.restaurant_outlined),
+                          label: Text(l10n.recipeCookNow),
+                        ),
+                      if (match.missingIngredientNames.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => runWithFeedback(
+                            context,
+                            actions.addMissingToShopping(match),
+                          ),
+                          icon: const Icon(Icons.add_shopping_cart_outlined),
+                          label: Text(l10n.recipeAddMissing),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(l10n.recipeSavedLocally)),
+                          );
+                        },
+                        icon: const Icon(Icons.bookmark_outline),
+                        label: Text(l10n.recipeSave),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _IngredientRow extends StatelessWidget {
+  const _IngredientRow({required this.detail, required this.recipe});
+
+  final IngredientMatchDetail detail;
+  final Recipe recipe;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final ingredient = recipe.ingredients.firstWhere(
+      (i) => i.name == detail.ingredientName,
+      orElse: () => RecipeIngredient(
+        id: '',
+        recipeId: recipe.id,
+        name: detail.ingredientName,
+        optional: detail.optional,
+      ),
+    );
+
+    final (icon, color) = switch (detail.kind) {
+      IngredientMatchKind.exact => (
+        Icons.check_circle,
+        theme.colorScheme.primary,
+      ),
+      IngredientMatchKind.substitution => (
+        Icons.swap_horiz,
+        theme.colorScheme.tertiary,
+      ),
+      IngredientMatchKind.partial => (
+        Icons.warning_amber_rounded,
+        theme.colorScheme.secondary,
+      ),
+      IngredientMatchKind.missing => (
+        Icons.cancel_outlined,
+        theme.colorScheme.error,
+      ),
+    };
+
+    final locationNote = detail.locations.isEmpty
+        ? null
+        : detail.locations.join(', ');
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(detail.ingredientName),
+      subtitle: Text(
+        [
+          if (ingredient.quantity != null)
+            '${ingredient.quantity!.amount} ${ingredient.quantity!.unit.label(l10n)}',
+          if (detail.optional) l10n.optionalSuffix,
+          if (detail.substitutionUsed != null)
+            l10n.recipeUsingSubstitution(detail.substitutionUsed!),
+          if (detail.kind == IngredientMatchKind.partial)
+            l10n.recipePartialMatch,
+          ?locationNote,
+        ].where((s) => s.isNotEmpty).join(' · '),
+      ),
     );
   }
 }

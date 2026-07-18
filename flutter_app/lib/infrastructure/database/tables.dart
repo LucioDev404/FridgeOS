@@ -104,6 +104,16 @@ class Recipes extends Table {
 
   /// Optional difficulty wire value (added in schema v2).
   TextColumn get difficulty => text().nullable()();
+
+  /// Short description (schema v3).
+  TextColumn get description => text().nullable()();
+
+  /// Cuisine label (schema v3).
+  TextColumn get cuisine => text().nullable()();
+
+  /// Hero / card image URL (schema v3).
+  TextColumn get imageUrl => text().nullable()();
+
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   IntColumn get deletedAt => integer().nullable()();
@@ -124,6 +134,10 @@ class RecipeIngredients extends Table {
   RealColumn get quantityAmount => real().nullable()();
   TextColumn get quantityUnit => text().nullable()();
   BoolColumn get optional => boolean().withDefault(const Constant(false))();
+
+  /// JSON array of explicit substitution names (schema v3).
+  TextColumn get substitutionsJson =>
+      text().withDefault(const Constant('[]'))();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -135,6 +135,9 @@ class ShellScaffold extends StatelessWidget {
     if (path.startsWith('/recipes/')) {
       return l10n.recipesTitle;
     }
+    if (path.startsWith('/shopping/export')) {
+      return l10n.shoppingExportTitle;
+    }
     if (path.startsWith('/shopping/qr-export')) {
       return l10n.shoppingQrExportTitle;
     }
