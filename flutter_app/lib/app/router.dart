@@ -10,6 +10,7 @@ import 'package:fridgeos/features/recipes/presentation/recipe_detail_screen.dart
 import 'package:fridgeos/features/recipes/presentation/recipes_screen.dart';
 import 'package:fridgeos/features/settings/presentation/settings_screen.dart';
 import 'package:fridgeos/features/shopping/presentation/shopping_screen.dart';
+import 'package:fridgeos/features/statistics/presentation/statistics_detail_pages.dart';
 import 'package:fridgeos/features/statistics/presentation/statistics_screen.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,7 +18,9 @@ import 'package:go_router/go_router.dart';
 ///
 /// A [StatefulShellRoute.indexedStack] provides a persistent navigation
 /// rail/bar with independent navigation state per branch (see
-/// docs/07-architecture.md §5). The scanner is a separate full-screen route.
+/// docs/07-architecture.md §5). Nested branch routes (recipes detail,
+/// statistics detail) share the shell AppBar Back button. The scanner and
+/// locations manager are full-screen routes outside the shell.
 GoRouter createRouter() {
   return GoRouter(
     initialLocation: '/',
@@ -47,7 +50,32 @@ GoRouter createRouter() {
           ),
           _branch('/shopping', const ShoppingScreen()),
           _branch('/history', const HistoryScreen()),
-          _branch('/statistics', const StatisticsScreen()),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/statistics',
+                builder: (context, state) => const StatisticsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'charts',
+                    builder: (context, state) => const StatisticsChartsPage(),
+                  ),
+                  GoRoute(
+                    path: 'insights',
+                    builder: (context, state) => const StatisticsInsightsPage(),
+                  ),
+                  GoRoute(
+                    path: 'products',
+                    builder: (context, state) => const StatisticsProductsPage(),
+                  ),
+                  GoRoute(
+                    path: 'forecast',
+                    builder: (context, state) => const StatisticsForecastPage(),
+                  ),
+                ],
+              ),
+            ],
+          ),
           _branch('/settings', const SettingsScreen()),
         ],
       ),

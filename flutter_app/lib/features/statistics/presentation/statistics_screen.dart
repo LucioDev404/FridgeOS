@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgeos/app/theme/app_spacing.dart';
-import 'package:fridgeos/core/utils/number_format.dart';
 import 'package:fridgeos/core/widgets/empty_state.dart';
 import 'package:fridgeos/features/statistics/application/statistics_providers.dart';
-import 'package:fridgeos/features/statistics/presentation/statistics_charts.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 
-/// Consumption and food-waste statistics (FR-STAT-1/2/4).
+/// Statistics hub. Detail pages live on nested routes so the shell AppBar can
+/// show a Back button and Android system back remains consistent.
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
 
@@ -15,7 +15,6 @@ class StatisticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final statsAsync = ref.watch(statisticsViewModelProvider);
-    final filter = ref.watch(statisticsLocationFilterProvider);
 
     return statsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -41,143 +40,71 @@ class StatisticsScreen extends ConsumerWidget {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.restaurant_outlined),
               title: Text(l10n.statisticsConsumptionTotal),
-              trailing: Text(formatAmount(stats.consumptionTotal)),
+              trailing: Text(_fmt(stats.consumptionTotal)),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.delete_outline),
               title: Text(l10n.statisticsWasteTotal),
-              trailing: Text(formatAmount(stats.wasteTotal)),
+              trailing: Text(_fmt(stats.wasteTotal)),
             ),
             const Divider(height: AppSpacing.xl),
             Text(
-              l10n.statisticsMetricsSection,
+              l10n.statisticsTitle,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            StatisticsMetricTile(
-              title: l10n.statisticsDailyUsage,
-              value: formatAmount(stats.averageDailyUsage),
-              icon: Icons.today_outlined,
+            const SizedBox(height: AppSpacing.sm),
+            _NavTile(
+              icon: Icons.show_chart,
+              title: l10n.statisticsChartsSection,
+              onTap: () => context.push('/statistics/charts'),
             ),
-            StatisticsMetricTile(
-              title: l10n.statisticsVelocity,
-              value: formatAmount(stats.consumptionVelocity),
-              icon: Icons.speed_outlined,
+            _NavTile(
+              icon: Icons.insights_outlined,
+              title: l10n.statisticsMetricsSection,
+              onTap: () => context.push('/statistics/insights'),
             ),
-            StatisticsMetricTile(
-              title: l10n.statisticsOscillation,
-              value: formatAmount(stats.inventoryOscillation),
-              icon: Icons.waves_outlined,
+            _NavTile(
+              icon: Icons.category_outlined,
+              title: l10n.statisticsMostConsumedSection,
+              onTap: () => context.push('/statistics/products'),
             ),
-            StatisticsMetricTile(
-              title: l10n.statisticsRestockFrequency,
-              value: '${stats.restockFrequency}',
-              icon: Icons.add_box_outlined,
+            _NavTile(
+              icon: Icons.timeline_outlined,
+              title: l10n.forecastSection,
+              onTap: () => context.push('/statistics/forecast'),
             ),
-            StatisticsMetricTile(
-              title: l10n.statisticsLowStockFrequency,
-              value: '${stats.lowStockFrequency}',
-              icon: Icons.warning_amber_outlined,
-            ),
-            StatisticsMetricTile(
-              title: l10n.statisticsWeeklyConsumption,
-              value: formatAmount(
-                stats.weeklyConsumption.values.fold<double>(0, (a, b) => a + b),
-              ),
-              icon: Icons.date_range_outlined,
-            ),
-            StatisticsMetricTile(
-              title: l10n.statisticsMonthlyConsumption,
-              value: formatAmount(
-                stats.monthlyConsumption.values.fold<double>(
-                  0,
-                  (a, b) => a + b,
-                ),
-              ),
-              icon: Icons.calendar_month_outlined,
-            ),
-            const Divider(height: AppSpacing.xl),
-            StatisticsCharts(
-              stats: stats,
-              filter: filter,
-              onFilterChanged: (value) => ref
-                  .read(statisticsLocationFilterProvider.notifier)
-                  .set(value),
-            ),
-            if (stats.mostConsumed.isNotEmpty) ...[
-              const Divider(height: AppSpacing.xl),
-              Text(
-                l10n.statisticsMostConsumedSection,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final line in stats.mostConsumed)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(line.productName),
-                  trailing: Text(formatAmount(line.amount)),
-                ),
-            ],
-            if (stats.leastConsumed.isNotEmpty) ...[
-              const Divider(height: AppSpacing.xl),
-              Text(
-                l10n.statisticsLeastConsumedSection,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final line in stats.leastConsumed.take(5))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(line.productName),
-                  trailing: Text(formatAmount(line.amount)),
-                ),
-            ],
-            if (stats.wasteByProduct.isNotEmpty) ...[
-              const Divider(height: AppSpacing.xl),
-              Text(
-                l10n.statisticsWasteSection,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final line in stats.wasteByProduct)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(line.productName),
-                  trailing: Text(formatAmount(line.amount)),
-                ),
-            ],
-            if (stats.forecasts.isNotEmpty) ...[
-              const Divider(height: AppSpacing.xl),
-              Text(
-                l10n.forecastSection,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final forecast in stats.forecasts.take(5))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.timeline_outlined),
-                  title: Text(
-                    forecast.estimatedDaysUntilEmpty == null
-                        ? l10n.forecastCadence(
-                            forecast.productName,
-                            forecast.averageDaysBetweenConsumption
-                                .round()
-                                .clamp(1, 9999),
-                          )
-                        : l10n.forecastRunOut(
-                            forecast.productName,
-                            forecast.estimatedDaysUntilEmpty!.round().clamp(
-                              1,
-                              9999,
-                            ),
-                          ),
-                  ),
-                ),
-            ],
           ],
         );
       },
+    );
+  }
+
+  String _fmt(double value) {
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(1);
+  }
+}
+
+class _NavTile extends StatelessWidget {
+  const _NavTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(title),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     );
   }
 }

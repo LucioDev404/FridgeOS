@@ -36,16 +36,47 @@ jobs:
       - name: Generate sources
         run: bash ../scripts/gen.sh
 
-      - name: Verify CI signing keystore
+      - name: Configure stable CI signing
         run: |
           test -f android/app/fridgeos-ci.jks
-          echo "Using committed fridgeos-ci.jks for release signing (stable updates)."
+          # Explicit key.properties so Gradle never falls back to debug signing.
+          cp android/key.properties.ci android/key.properties
+          # On CI, build.gradle.kts still prefers fridgeos-ci.jks via GITHUB_ACTIONS.
+          echo "Configured stable FridgeOS CI signing keystore."
 
       - name: Build APK (release)
         run: flutter build apk --release
 
       - name: Build App Bundle (release)
         run: flutter build appbundle --release
+
+      - name: Verify APK signature certificate
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -f "$APK"
+          # Extract and print the signing cert; must match fridgeos-ci.jks.
+          EXPECTED=$(keytool -list -v \
+            -keystore android/app/fridgeos-ci.jks \
+            -storepass fridgeos-ci-store \
+            -alias fridgeos | awk -F': ' '/SHA256:/{print $2; exit}')
+          # apksigner is preferred when present; fall back to jarsigner metadata.
+          if command -v apksigner >/dev/null 2>&1; then
+            ACTUAL=$(apksigner verify --print-certs "$APK" | awk -F': ' '/SHA-256 digest/{print $2; exit}' | tr '[:lower:]' '[:upper:]')
+          else
+            # Unpack META-INF cert via keytool -printcert on the APK zip entry.
+            TMP=$(mktemp -d)
+            unzip -qo "$APK" -d "$TMP" 'META-INF/*'
+            CERT=$(find "$TMP/META-INF" -type f \( -name '*.RSA' -o -name '*.DSA' -o -name '*.EC' \) | head -1)
+            ACTUAL=$(keytool -printcert -file "$CERT" | awk -F': ' '/SHA256:/{print $2; exit}')
+            rm -rf "$TMP"
+          fi
+          echo "Expected SHA256: $EXPECTED"
+          echo "APK SHA256:      $ACTUAL"
+          test -n "$EXPECTED"
+          test -n "$ACTUAL"
+          test "$EXPECTED" = "$ACTUAL"
+          echo "APK signing certificate matches fridgeos-ci.jks — updates will install in place."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

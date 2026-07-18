@@ -1,4 +1,4 @@
 storePassword=fridgeos-ci-store
 keyPassword=fridgeos-ci-store
 keyAlias=fridgeos
-storeFile=app/fridgeos-ci.jks
+storeFile=fridgeos-ci.jks

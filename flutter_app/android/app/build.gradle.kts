@@ -7,19 +7,29 @@ plugins {
 }
 
 // Release signing preference order:
-// 1. android/key.properties (local / production secrets, git-ignored)
-// 2. committed CI keystore android/app/fridgeos-ci.jks (stable update signing)
-// 3. debug keystore (last resort for local `flutter run --release`)
+// 1. On CI (GITHUB_ACTIONS/CI): always use committed android/app/fridgeos-ci.jks
+// 2. Local android/key.properties (production secrets, git-ignored)
+// 3. Committed CI keystore for local release builds without key.properties
+// 4. Debug keystore (last resort)
 //
-// Root cause of "must uninstall to install APK": CI previously fell back to the
-// machine-local debug keystore, so each runner produced a different signature.
-// Android rejects updates when the signing certificate changes.
+// Root cause of "APK is a different application / must uninstall":
+// Android requires the SAME signing certificate for updates. Older CI builds
+// fell back to each runner's unique debug keystore, so each APK had a different
+// signature while sharing applicationId com.fridgeos.fridgeos.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val ciKeystoreFile = file("fridgeos-ci.jks")
+val isCi =
+    System.getenv("GITHUB_ACTIONS") == "true" || System.getenv("CI") == "true"
 val hasReleaseSigning = keystorePropertiesFile.exists()
-val hasCiSigning = !hasReleaseSigning && ciKeystoreFile.exists()
-if (hasReleaseSigning) {
+val hasCiKeystore = ciKeystoreFile.exists()
+
+// Prefer the stable CI keystore on GitHub Actions so every workflow APK updates
+// in place. Local developers may still use key.properties for Play uploads.
+val useCiKeystore = hasCiKeystore && (isCi || !hasReleaseSigning)
+val useLocalReleaseSigning = hasReleaseSigning && !isCi
+
+if (useLocalReleaseSigning) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
@@ -47,14 +57,14 @@ android {
     }
 
     signingConfigs {
-        if (hasReleaseSigning) {
+        if (useLocalReleaseSigning) {
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
             }
-        } else if (hasCiSigning) {
+        } else if (useCiKeystore) {
             create("release") {
                 keyAlias = "fridgeos"
                 keyPassword = "fridgeos-ci-store"
@@ -66,7 +76,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseSigning || hasCiSigning) {
+            val hasReleaseConfig =
+                useLocalReleaseSigning || useCiKeystore
+            signingConfig = if (hasReleaseConfig) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -78,6 +90,27 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+}
+
+// Fail CI loudly if the release build would still be debug-signed.
+afterEvaluate {
+    if (isCi && !useCiKeystore) {
+        throw GradleException(
+            "CI release builds require android/app/fridgeos-ci.jks so APKs share " +
+                "one signing certificate and install as updates.",
+        )
+    }
+    tasks.matching { it.name.contains("assembleRelease", ignoreCase = true) }.configureEach {
+        doFirst {
+            val configName = android.buildTypes.getByName("release").signingConfig?.name
+            logger.lifecycle("FridgeOS release signingConfig=$configName (ci=$isCi, ciKeystore=$useCiKeystore)")
+            if (isCi && configName != "release") {
+                throw GradleException(
+                    "Refusing to build a CI release APK without the release signing config.",
+                )
+            }
         }
     }
 }

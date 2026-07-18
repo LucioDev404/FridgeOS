@@ -7,9 +7,9 @@ import 'package:fridgeos/features/inventory/application/inventory_actions.dart';
 import 'package:fridgeos/features/inventory/application/inventory_line_item.dart';
 import 'package:fridgeos/features/inventory/application/inventory_providers.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
-import 'package:fridgeos/features/inventory/presentation/widgets/edit_product_sheet.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/expiration_badge.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/move_location_dialog.dart';
+import 'package:fridgeos/features/inventory/presentation/widgets/product_form_sheet.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/set_quantity_dialog.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 

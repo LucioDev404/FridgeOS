@@ -142,7 +142,7 @@ class _LocationFilterBar extends ConsumerWidget {
           ],
           const SizedBox(width: AppSpacing.md),
           TextButton.icon(
-            onPressed: () => context.go('/locations'),
+            onPressed: () => context.push('/locations'),
             icon: const Icon(Icons.tune),
             label: Text(l10n.manageLocations),
           ),
