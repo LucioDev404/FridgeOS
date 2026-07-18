@@ -280,7 +280,9 @@ final class RecipeRanker {
         final head = remaining.first;
         return (head.completionRatio - m.completionRatio).abs() <= 0.15;
       });
-      final pick = index >= 0 ? remaining.removeAt(index) : remaining.removeAt(0);
+      final pick = index >= 0
+          ? remaining.removeAt(index)
+          : remaining.removeAt(0);
       result.add(pick);
       lastCuisine = pick.recipe.cuisine?.toLowerCase();
     }
