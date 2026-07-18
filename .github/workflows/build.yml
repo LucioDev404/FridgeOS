@@ -55,27 +55,74 @@ jobs:
           set -euo pipefail
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -f "$APK"
-          # Extract and print the signing cert; must match fridgeos-ci.jks.
+
+          # Normalize fingerprints: strip separators, uppercase hex.
+          # keytool prints "AA:BB:…"; apksigner prints "aabb…" without colons.
+          normalize_fp() {
+            tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]'
+          }
+
           EXPECTED=$(keytool -list -v \
             -keystore android/app/fridgeos-ci.jks \
             -storepass fridgeos-ci-store \
-            -alias fridgeos | awk -F': ' '/SHA256:/{print $2; exit}')
-          # apksigner is preferred when present; fall back to jarsigner metadata.
+            -alias fridgeos \
+            | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' \
+            | head -n 1 \
+            | normalize_fp)
+          if [ -z "$EXPECTED" ]; then
+            echo "::error::Failed to read SHA256 from android/app/fridgeos-ci.jks"
+            exit 1
+          fi
+
+          # Resolve apksigner from the Android SDK (rarely on PATH on Actions runners).
+          APKSIGNER=""
           if command -v apksigner >/dev/null 2>&1; then
-            ACTUAL=$(apksigner verify --print-certs "$APK" | awk -F': ' '/SHA-256 digest/{print $2; exit}' | tr '[:lower:]' '[:upper:]')
+            APKSIGNER=$(command -v apksigner)
           else
-            # Unpack META-INF cert via keytool -printcert on the APK zip entry.
+            SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            if [ -n "$SDK_ROOT" ] && [ -d "$SDK_ROOT/build-tools" ]; then
+              APKSIGNER=$(ls -1 "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1 || true)
+            fi
+          fi
+
+          ACTUAL=""
+          if [ -n "${APKSIGNER}" ] && [ -x "${APKSIGNER}" ]; then
+            echo "Using apksigner: $APKSIGNER"
+            CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+            printf '%s\n' "$CERTS"
+            ACTUAL=$(printf '%s\n' "$CERTS" \
+              | sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' \
+              | head -n 1 \
+              | normalize_fp)
+          else
+            echo "apksigner not found; falling back to META-INF jar signature"
             TMP=$(mktemp -d)
-            unzip -qo "$APK" -d "$TMP" 'META-INF/*'
-            CERT=$(find "$TMP/META-INF" -type f \( -name '*.RSA' -o -name '*.DSA' -o -name '*.EC' \) | head -1)
-            ACTUAL=$(keytool -printcert -file "$CERT" | awk -F': ' '/SHA256:/{print $2; exit}')
+            unzip -qo "$APK" -d "$TMP" 'META-INF/*' || true
+            CERT=$(find "$TMP/META-INF" -type f \( -name '*.RSA' -o -name '*.DSA' -o -name '*.EC' \) 2>/dev/null | head -n 1 || true)
+            if [ -z "${CERT}" ]; then
+              echo "::error::No META-INF signing cert in APK and apksigner unavailable."
+              ls -la "$TMP/META-INF" 2>/dev/null || true
+              rm -rf "$TMP"
+              exit 1
+            fi
+            ACTUAL=$(keytool -printcert -file "$CERT" \
+              | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' \
+              | head -n 1 \
+              | normalize_fp)
             rm -rf "$TMP"
           fi
+
           echo "Expected SHA256: $EXPECTED"
           echo "APK SHA256:      $ACTUAL"
-          test -n "$EXPECTED"
-          test -n "$ACTUAL"
-          test "$EXPECTED" = "$ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::Failed to extract signing certificate SHA256 from APK"
+            exit 1
+          fi
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::APK signing certificate does not match fridgeos-ci.jks"
+            echo "This usually means the release build fell back to the debug keystore."
+            exit 1
+          fi
           echo "APK signing certificate matches fridgeos-ci.jks — updates will install in place."
 
       - name: Upload APK

@@ -71,6 +71,9 @@ android {
                 storeFile = ciKeystoreFile
                 storePassword = "fridgeos-ci-store"
             }
+            logger.lifecycle(
+                "FridgeOS using CI keystore at ${ciKeystoreFile.absolutePath}",
+            )
         }
     }
 
@@ -81,6 +84,10 @@ android {
             signingConfig = if (hasReleaseConfig) {
                 signingConfigs.getByName("release")
             } else {
+                logger.warn(
+                    "FridgeOS release build falling back to DEBUG signing — " +
+                        "APKs will not update in place across machines.",
+                )
                 signingConfigs.getByName("debug")
             }
             // Shrink, obfuscate and strip unused resources (docs/09 §10).

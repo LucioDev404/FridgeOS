@@ -1,4 +1,5 @@
 storePassword=fridgeos-ci-store
 keyPassword=fridgeos-ci-store
 keyAlias=fridgeos
+# Relative to android/app/ (the Gradle application module).
 storeFile=fridgeos-ci.jks
