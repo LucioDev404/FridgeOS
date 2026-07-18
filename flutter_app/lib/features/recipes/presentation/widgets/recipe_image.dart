@@ -4,11 +4,11 @@ import 'package:fridgeos/app/theme/app_spacing.dart';
 
 /// Display size for recipe images (drives URL resize + decode cache).
 enum RecipeImageSize {
-  /// List / card thumbnails (~400px wide, lower quality).
+  /// Compact list / card thumbnails (~320px wide).
   thumbnail,
 
-  /// Detail hero (~900px wide).
-  hero,
+  /// Detail header (~720px wide) — not full-bleed hero resolution.
+  detail,
 }
 
 /// Lazy-loaded recipe image with resolution-aware URLs and offline fallback.
@@ -19,6 +19,7 @@ class RecipeImage extends StatelessWidget {
     this.size = RecipeImageSize.thumbnail,
     this.borderRadius,
     this.height,
+    this.width,
     super.key,
   });
 
@@ -27,20 +28,21 @@ class RecipeImage extends StatelessWidget {
   final RecipeImageSize size;
   final BorderRadius? borderRadius;
   final double? height;
+  final double? width;
 
   int get _targetWidth => switch (size) {
-    RecipeImageSize.thumbnail => 480,
-    RecipeImageSize.hero => 1080,
+    RecipeImageSize.thumbnail => 320,
+    RecipeImageSize.detail => 720,
   };
 
   int get _quality => switch (size) {
-    RecipeImageSize.thumbnail => 65,
-    RecipeImageSize.hero => 75,
+    RecipeImageSize.thumbnail => 55,
+    RecipeImageSize.detail => 70,
   };
 
   int get _memCacheWidth => switch (size) {
-    RecipeImageSize.thumbnail => 480,
-    RecipeImageSize.hero => 1080,
+    RecipeImageSize.thumbnail => 320,
+    RecipeImageSize.detail => 720,
   };
 
   /// Rewrites known CDN URLs to request a compressed, width-capped variant.
@@ -100,7 +102,7 @@ class RecipeImage extends StatelessWidget {
       child: Center(
         child: Icon(
           Icons.restaurant_menu,
-          size: size == RecipeImageSize.hero ? 56 : 40,
+          size: size == RecipeImageSize.detail ? 40 : 28,
           color: theme.colorScheme.onPrimary.withValues(alpha: 0.85),
         ),
       ),
@@ -116,7 +118,7 @@ class RecipeImage extends StatelessWidget {
         : CachedNetworkImage(
             imageUrl: resolved,
             fit: BoxFit.cover,
-            fadeInDuration: const Duration(milliseconds: 180),
+            fadeInDuration: const Duration(milliseconds: 160),
             memCacheWidth: _memCacheWidth,
             maxWidthDiskCache: _memCacheWidth,
             placeholder: (_, _) => fallback,
@@ -125,7 +127,11 @@ class RecipeImage extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: radius,
-      child: SizedBox(height: height, width: double.infinity, child: child),
+      child: SizedBox(
+        height: height,
+        width: width ?? double.infinity,
+        child: child,
+      ),
     );
   }
 }

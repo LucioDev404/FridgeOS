@@ -7,14 +7,18 @@ import 'package:fridgeos/domain/entities/recipe.dart';
 import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
+import 'package:fridgeos/features/recipes/presentation/widgets/recipe_diet_label.dart';
 import 'package:fridgeos/features/recipes/presentation/widgets/recipe_image.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
 
-/// Full offline recipe detail with hero image and match breakdown.
+/// Full offline recipe detail with balanced header and match breakdown.
 class RecipeDetailScreen extends ConsumerWidget {
   const RecipeDetailScreen({required this.recipeId, super.key});
 
   final String recipeId;
+
+  /// Caps hero height so title/meta stay near the top on wide tablets.
+  static const double _headerImageMaxHeight = 188;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,27 +40,83 @@ class RecipeDetailScreen extends ConsumerWidget {
 
         final recipe = match.recipe;
         final theme = Theme.of(context);
+        final diet = recipeDietLabel(recipe.tags, l10n);
+        final metaParts = <String>[
+          if (recipe.cuisine != null) recipe.cuisine!,
+          l10n.recipePrepTime(recipe.prepTimeMinutes),
+          if (recipe.difficulty != null) recipe.difficulty!.label(l10n),
+          diet,
+          if (recipe.servings != null) l10n.recipeServings(recipe.servings!),
+        ];
 
         return ListView(
           padding: EdgeInsets.zero,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 10,
+            SizedBox(
+              height: _headerImageMaxHeight,
+              width: double.infinity,
               child: RecipeImage(
                 imageUrl: recipe.imageUrl,
                 cuisine: recipe.cuisine,
-                size: RecipeImageSize.hero,
+                size: RecipeImageSize.detail,
                 borderRadius: BorderRadius.zero,
+                height: _headerImageMaxHeight,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.xl,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(recipe.title, style: theme.textTheme.headlineSmall),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    metaParts.join(' · '),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Text(
+                        l10n.recipeCompletionPercent(match.completionPercent),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (match.isReadyToCook) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        Icon(
+                          Icons.check_circle,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          l10n.recipeReadyToCook,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: LinearProgressIndicator(
+                      value: match.completionRatio,
+                      minHeight: 6,
+                    ),
+                  ),
                   if (recipe.description != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
                     Text(
                       recipe.description!,
                       style: theme.textTheme.bodyLarge?.copyWith(
@@ -64,40 +124,6 @@ class RecipeDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      if (recipe.cuisine != null)
-                        Chip(label: Text(recipe.cuisine!)),
-                      Chip(
-                        label: Text(
-                          l10n.recipePrepTime(recipe.prepTimeMinutes),
-                        ),
-                      ),
-                      if (recipe.servings != null)
-                        Chip(
-                          label: Text(l10n.recipeServings(recipe.servings!)),
-                        ),
-                      if (recipe.difficulty != null)
-                        Chip(
-                          label: Text(
-                            '${l10n.recipeDifficultyLabel}: ${recipe.difficulty!.label(l10n)}',
-                          ),
-                        ),
-                      Chip(
-                        label: Text(
-                          l10n.recipeCompletionPercent(match.completionPercent),
-                        ),
-                      ),
-                      if (match.isReadyToCook)
-                        Chip(
-                          avatar: const Icon(Icons.check_circle, size: 16),
-                          label: Text(l10n.recipeReadyToCook),
-                        ),
-                    ],
-                  ),
                   const SizedBox(height: AppSpacing.xl),
                   Text(
                     l10n.recipeIngredientsSection,

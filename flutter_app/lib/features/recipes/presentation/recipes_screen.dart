@@ -7,8 +7,8 @@ import 'package:fridgeos/domain/services/recipe_ranker.dart';
 import 'package:fridgeos/domain/value_objects/diet_preference.dart';
 import 'package:fridgeos/features/expiration/application/expiration_providers.dart';
 import 'package:fridgeos/features/inventory/presentation/widgets/action_feedback.dart';
-import 'package:fridgeos/features/recipes/application/recipe_actions.dart';
 import 'package:fridgeos/features/recipes/application/recipe_providers.dart';
+import 'package:fridgeos/features/recipes/presentation/widgets/recipe_diet_label.dart';
 import 'package:fridgeos/features/recipes/presentation/widgets/recipe_image.dart';
 import 'package:fridgeos/features/settings/application/settings_actions.dart';
 import 'package:fridgeos/l10n/gen/app_localizations.dart';
@@ -88,16 +88,18 @@ class RecipesScreen extends ConsumerWidget {
                 );
               }
               return ListView.separated(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
                 itemCount: matches.length,
                 separatorBuilder: (_, _) =>
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.sm),
                 itemBuilder: (context, index) {
                   final match = matches[index];
-                  return _RecipeCard(
-                    match: match,
-                    actions: ref.read(recipeActionsProvider),
-                  );
+                  return _RecipeCard(match: match);
                 },
               );
             },
@@ -108,17 +110,21 @@ class RecipesScreen extends ConsumerWidget {
   }
 }
 
+/// Compact horizontal card: thumbnail ~35% of visual weight, scannable meta.
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({required this.match, required this.actions});
+  const _RecipeCard({required this.match});
 
   final RecipeMatch match;
-  final RecipeActions actions;
+
+  static const double _imageWidth = 118;
+  static const double _cardHeight = 118;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final recipe = match.recipe;
+    final diet = recipeDietLabel(recipe.tags, l10n);
 
     return Material(
       color: theme.colorScheme.surfaceContainerLowest,
@@ -127,137 +133,92 @@ class _RecipeCard extends StatelessWidget {
       elevation: 0,
       child: InkWell(
         onTap: () => context.push('/recipes/${recipe.id}'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  RecipeImage(
-                    imageUrl: recipe.imageUrl,
-                    cuisine: recipe.cuisine,
-                    size: RecipeImageSize.thumbnail,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  Positioned(
-                    top: AppSpacing.sm,
-                    right: AppSpacing.sm,
-                    child: _MatchBadge(
-                      percent: match.completionPercent,
-                      ready: match.isReadyToCook,
-                    ),
-                  ),
-                ],
+        child: SizedBox(
+          height: _cardHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: _imageWidth,
+                child: RecipeImage(
+                  imageUrl: recipe.imageUrl,
+                  cuisine: recipe.cuisine,
+                  size: RecipeImageSize.thumbnail,
+                  borderRadius: BorderRadius.zero,
+                  height: _cardHeight,
+                  width: _imageWidth,
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(recipe.title, style: theme.textTheme.titleLarge),
-                  const SizedBox(height: AppSpacing.xs),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      if (recipe.cuisine != null)
-                        Chip(
-                          label: Text(recipe.cuisine!),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      Chip(
-                        label: Text(
-                          l10n.recipePrepTime(recipe.prepTimeMinutes),
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      if (recipe.difficulty != null)
-                        Chip(
-                          label: Text(recipe.difficulty!.label(l10n)),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      if (match.isReadyToCook)
-                        Chip(
-                          avatar: const Icon(Icons.check_circle, size: 16),
-                          label: Text(l10n.recipeReadyToCook),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                    ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.sm,
+                    AppSpacing.md,
+                    AppSpacing.sm,
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  LinearProgressIndicator(
-                    value: match.completionRatio,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (match.availableIngredientNames.isNotEmpty)
-                    Text(
-                      l10n.recipeAvailableIngredients(
-                        match.availableIngredientNames.join(', '),
-                      ),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  if (match.missingIngredientNames.isNotEmpty)
-                    Text(
-                      l10n.recipeMissingIngredients(
-                        match.missingIngredientNames.join(', '),
-                      ),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  if (match.optionalIngredientNames.isNotEmpty)
-                    Text(
-                      l10n.recipeOptionalIngredients(
-                        match.optionalIngredientNames.join(', '),
-                      ),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  if (match.suggestedSubstitutions.isNotEmpty)
-                    Text(
-                      l10n.recipeSubstitutions(
-                        match.suggestedSubstitutions.join(' · '),
-                      ),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.tertiary,
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      FilledButton.tonalIcon(
-                        onPressed: () => context.push('/recipes/${recipe.id}'),
-                        icon: const Icon(Icons.menu_book_outlined),
-                        label: Text(l10n.recipeViewDetails),
-                      ),
-                      if (match.missingIngredientNames.isNotEmpty)
-                        OutlinedButton.icon(
-                          onPressed: () => runWithFeedback(
-                            context,
-                            actions.addMissingToShopping(match),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              recipe.title,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          icon: const Icon(Icons.add_shopping_cart_outlined),
-                          label: Text(l10n.recipeAddMissing),
+                          const SizedBox(width: AppSpacing.sm),
+                          _MatchBadge(
+                            percent: match.completionPercent,
+                            ready: match.isReadyToCook,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        [
+                          if (recipe.cuisine != null) recipe.cuisine!,
+                          l10n.recipePrepTime(recipe.prepTimeMinutes),
+                          if (recipe.difficulty != null)
+                            recipe.difficulty!.label(l10n),
+                          diet,
+                        ].join(' · '),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      if (match.isReadyToCook)
-                        FilledButton.icon(
-                          onPressed: () =>
-                              runWithFeedback(context, actions.cooked(recipe)),
-                          icon: const Icon(Icons.restaurant_outlined),
-                          label: Text(l10n.recipeCookNow),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: LinearProgressIndicator(
+                          value: match.completionRatio,
+                          minHeight: 4,
                         ),
+                      ),
+                      if (match.isReadyToCook) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          l10n.recipeReadyToCook,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -276,16 +237,16 @@ class _MatchBadge extends StatelessWidget {
     return Material(
       color: ready
           ? theme.colorScheme.primaryContainer
-          : theme.colorScheme.surface.withValues(alpha: 0.92),
+          : theme.colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
+          vertical: 2,
         ),
         child: Text(
           '$percent%',
-          style: theme.textTheme.labelLarge?.copyWith(
+          style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
